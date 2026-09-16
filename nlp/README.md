@@ -16,13 +16,14 @@ Stanza español
   ├─ morfología
   ├─ lematización
   ├─ dependencias UD
-  └─ NER
+  ├─ NER
+  └─ coreferencia neuronal (perfil completo)
   ↓
 postprocesado npc-int
-  ├─ roles semánticos aproximados
+  ├─ roles semánticos aproximados desde UD
   ├─ negación
   ├─ tipo de acto
-  └─ hipótesis de coreferencia
+  └─ normalización de cadenas de coreferencia
   ↓
 semantic-interpreter.js
   ↓
@@ -31,7 +32,9 @@ DialogueAct
 memoria / cognición / respuesta
 ```
 
-El resolvedor de coreferencia y los roles semánticos añadidos por `npc-int` son hipótesis explícitas. No se presentan como una salida neuronal nativa de Stanza.
+Stanza dispone actualmente de un modelo de coreferencia para español. `npc-int` lo usa cuando el perfil completo está instalado. Si el modelo de coreferencia no está disponible, el servidor conserva POS/lema/dependencias/NER y cae a un resolvedor de coreferencia heurístico marcado explícitamente como fallback.
+
+Los roles semánticos de `npc-int` (`agent`, `patient`, `recipient`, `circumstance`) se proyectan desde dependencias UD; no se presentan como un modelo SRL neuronal independiente.
 
 ## Instalación
 
@@ -59,12 +62,30 @@ python -m pip install -r nlp/requirements.txt
 python nlp/download_models.py
 ```
 
+`download_models.py` descarga por defecto:
+
+```text
+tokenize,mwt,pos,lemma,depparse,ner,coref
+```
+
+Si quieres una instalación más liviana:
+
+```bash
+python nlp/download_models.py --no-coref
+```
+
 ## Ejecutar
 
-CPU:
+Perfil completo:
 
 ```bash
 python nlp/server.py --backend stanza
+```
+
+Perfil ligero, sin coreferencia neuronal:
+
+```bash
+python nlp/server.py --backend stanza --no-coref
 ```
 
 CUDA, si la instalación local de PyTorch/Stanza dispone de soporte compatible:
@@ -111,6 +132,7 @@ Una respuesta contiene, entre otros campos:
 ```json
 {
   "backend": "stanza",
+  "corefMode": "neural",
   "sentences": [
     {
       "tokens": [
@@ -134,6 +156,7 @@ Una respuesta contiene, entre otros campos:
   ],
   "entities": [],
   "coreferences": [],
+  "coreferenceChains": [],
   "frames": []
 }
 ```
@@ -149,4 +172,6 @@ Los puertos son distintos a propósito:
 8765  Nanochat / generación neuronal
 ```
 
-El NLP ayuda a decidir qué quiso decir el jugador. Nanochat ayuda a redactar o realizar interpretación neuronal adicional. Ninguno ejecuta acciones físicas directamente; esas siguen pasando por `NpcInt.Core` y el ciclo mental.
+El NLP ayuda a decidir qué quiso decir el jugador. Nanochat recibe también el análisis NLP cuando ambos servicios están activos, para no tener que volver a inferir desde cero predicado, roles, entidades o referencias.
+
+Ninguno ejecuta acciones físicas directamente; esas siguen pasando por `NpcInt.Core` y el ciclo mental.
