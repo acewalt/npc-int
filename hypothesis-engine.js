@@ -47,21 +47,28 @@
     return new Map((activation?.concepts||[]).map(c=>[c.id,c.score]));
   }
 
+  function observedSet(activation){
+    return new Map((activation?.seeds||[]).map(c=>[c.id,c.weight]));
+  }
+
   function relevantEffects(activation){
     const graph=window.NpcIntConceptGraph;
     if(!graph)return [];
     const out=[];
-    for(const c of activation?.concepts||[]){
+    // Solo conceptos realmente observados pueden actuar como efecto de una
+    // explicación causal. Los conceptos alcanzados por propagación son ideas,
+    // no nuevas observaciones.
+    for(const c of (activation?.concepts||[]).filter(x=>x.seed)){
       const causes=graph.causesOf(c.id)||[];
       if(causes.length)out.push({effect:c,causes});
     }
     return out.sort((a,b)=>b.effect.score-a.effect.score).slice(0,5);
   }
 
-  function evidenceForCause(cause,effect,active,perception){
+  function evidenceForCause(cause,effect,observed,perception){
     const ev=[];
-    if(active.has(effect.id))ev.push({text:`se observó/activó «${effect.label}»`,weight:active.get(effect.id),source:"perception"});
-    if(active.has(cause.cause))ev.push({text:`también hay evidencia relacionada con «${cause.causeLabel}»`,weight:active.get(cause.cause),source:"context"});
+    if(observed.has(effect.id))ev.push({text:`se observó «${effect.label}»`,weight:observed.get(effect.id),source:"perception"});
+    if(observed.has(cause.cause))ev.push({text:`también se observó algo relacionado con «${cause.causeLabel}»`,weight:observed.get(cause.cause),source:"perception"});
     const p=HNorm(perception||"");
     if(cause.cause==="persona"&&/(alguien|persona|voz|pasos)/.test(p))ev.push({text:"el evento menciona una señal compatible con presencia humana",weight:.78,source:"text"});
     if(cause.cause==="viento"&&/(viento|aire|corriente)/.test(p))ev.push({text:"se menciona viento o corriente de aire",weight:.82,source:"text"});
@@ -69,41 +76,42 @@
     return ev;
   }
 
-  function evidenceAgainstCause(cause,active){
+  function evidenceAgainstCause(cause,observed){
     const expected=EXPECTED[cause.cause]||[];
     if(!expected.length)return [];
-    const present=expected.filter(x=>active.has(x));
+    const present=expected.filter(x=>observed.has(x));
     if(present.length)return [];
     return [{text:`todavía no hay una señal independiente esperable de ${cause.causeLabel}`,weight:.18,source:"missing-corroboration"}];
   }
 
   function makeHypothesis(store,cause,effect,activation,perception){
-    const active=activatedSet(activation);
-    const support=evidenceForCause(cause,effect,active,perception);
-    const against=evidenceAgainstCause(cause,active);
+    const observed=observedSet(activation);
+    const support=evidenceForCause(cause,effect,observed,perception);
+    const against=evidenceAgainstCause(cause,observed);
     const supportScore=support.reduce((s,x)=>s+x.weight,0)/Math.max(1,support.length);
     const againstScore=against.reduce((s,x)=>s+x.weight,0);
     const prior=cause.weight*.52;
     const confidence=clamp(.12+prior+supportScore*.28-againstScore*.20,.08,.86);
+    const test=TESTS[cause.cause]||`buscar una observación independiente que confirme o descarte ${cause.causeLabel}`;
     return {
       id:store.seq++,
-      claim:CAUSE_PHRASE[cause.cause]||`${cause.causeLabel} podría explicar ${effect.effectLabel}`,
+      claim:CAUSE_PHRASE[cause.cause]||`${cause.causeLabel} podría explicar ${effect.label}`,
       cause:{id:cause.cause,label:cause.causeLabel},
       effect:{id:effect.id,label:effect.label},
       confidence,
       status:"unverified",
       evidenceFor:support,
       evidenceAgainst:against,
-      test:TESTS[cause.cause]||`buscar una observación independiente que confirme o descarte ${cause.causeLabel}`,
-      testability:TESTS[cause.cause]?.startsWith("escuchar")?.88:TESTS[cause.cause]?.startsWith("observar")?.84:.7,
+      test,
+      testability:test.startsWith("escuchar")?.88:test.startsWith("observar")?.84:.7,
       source:"concept-graph"
     };
   }
 
-  function genericAlternatives(store,activation,perception){
-    const active=activatedSet(activation),out=[];
-    const has=x=>active.has(x);
-    if((has("golpe")||has("ruido")||has("sonido"))&&!has("persona")&&!has("objeto_caido")){
+  function genericAlternatives(store,activation){
+    const observed=observedSet(activation),out=[];
+    const has=x=>observed.has(x);
+    if(has("golpe")||has("ruido")||has("sonido")){
       out.push({
         id:store.seq++,claim:"el sonido podría tener una causa física no observada todavía",cause:{id:"causa_desconocida",label:"una causa física desconocida"},
         effect:{id:has("golpe")?"golpe":"sonido",label:has("golpe")?"golpe":"sonido"},confidence:.3,status:"unverified",
@@ -111,7 +119,7 @@
         test:"repetir la observación desde otra posición y buscar cambios sincronizados con el sonido",testability:.76,source:"abductive-fallback"
       });
     }
-    if((has("amenaza")||has("peligro"))){
+    if(has("amenaza")||has("peligro")){
       out.push({
         id:store.seq++,claim:"la señal podría parecer peligrosa sin que exista una amenaza inmediata",cause:{id:"falsa_alarma",label:"una falsa alarma"},
         effect:{id:"peligro",label:"señal de peligro"},confidence:.26,status:"unverified",
@@ -139,10 +147,11 @@
     for(const item of relevantEffects(activation)){
       for(const cause of item.causes.slice(0,5))raw.push(makeHypothesis(store,cause,item.effect,activation,perception));
     }
-    raw.push(...genericAlternatives(store,activation,perception));
+    raw.push(...genericAlternatives(store,activation));
     let hypotheses=dedupe(raw).slice(0,7);
 
-    // Normalize confidence so close alternatives remain visibly competitive.
+    // Las alternativas cercanas permanecen competidoras; no forzamos una
+    // ganadora solo por diferencias pequeñas de heurística.
     if(hypotheses.length>1){
       const max=hypotheses[0].confidence;
       hypotheses=hypotheses.map((h,i)=>({...h,confidence:clamp(h.confidence-(i>0?Math.min(.08,i*.018):0),.06,.88),relativeToBest:max?clamp(h.confidence/max):0}));
@@ -176,5 +185,5 @@
   };
 
   window.NpcIntHypothesisEngine={generate,format};
-  print("system","","motor de hipótesis v1.0 cargado · abducción · evidencia a favor/en contra · pruebas falsables");
+  print("system","","motor de hipótesis v1.1 cargado · observación ≠ inferencia · abducción · evidencia · pruebas falsables");
 })();
