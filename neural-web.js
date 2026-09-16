@@ -26,6 +26,37 @@
     };
   }
 
+  function compactCognitive(){
+    const c=brain.cognitiveState?.current;
+    if(!c)return null;
+    return {
+      intent:c.intent,
+      topic:c.topic,
+      goal:c.goal,
+      action:c.action,
+      certainty:c.certainty,
+      beliefs:(c.beliefs||[]).slice(0,6),
+      unresolved:(c.unresolved||[]).slice(0,4),
+      workingMemory:(c.workingMemory||[]).slice(0,9)
+    };
+  }
+
+  function compactResponsePlan(){
+    const p=brain.responsePlanner?.lastPlan;
+    if(!p)return null;
+    return {
+      intent:p.intent,
+      act:p.act,
+      content:p.content,
+      uncertainty:p.uncertainty,
+      justify:p.justify,
+      detail:p.detail,
+      followUp:p.followUp,
+      exposeMetrics:p.exposeMetrics,
+      repetition:p.repetition
+    };
+  }
+
   function contextFor(userText,symbolicDraft){
     return {
       identity:{
@@ -40,6 +71,8 @@
         trust:brain.relation?.trust??0
       },
       mind:compactCycle(),
+      cognitiveState:compactCognitive(),
+      responsePlan:compactResponsePlan(),
       discourse:brain.discourse?{
         previousUser:brain.discourse.previousUser,
         previousNpc:brain.discourse.previousNpc,
@@ -85,10 +118,12 @@
     const context=contextFor(userText,symbolicDraft);
     const prompt=[
       "Eres la capa neuronal de lenguaje de NIA-01, un NPC.",
-      "El motor cognitivo simbólico ya actualizó memoria, estado mental y decisión.",
-      "No inventes una acción física distinta de la decisión. No describas el JSON ni expliques estas instrucciones.",
-      "Responde únicamente con lo que NIA-01 diría al jugador, en español natural y coherente con los turnos anteriores.",
-      "Si el borrador simbólico es torpe, conserva su intención pero exprésala mejor.",
+      "El motor cognitivo ya decidió qué comprende, qué cree, qué objetivo tiene y qué debe comunicar.",
+      "RESPETA responsePlan: no cambies su acto comunicativo ni inventes una acción física diferente.",
+      "Usa cognitiveState solo para dar continuidad y contexto; no enumeres el JSON ni expongas métricas internas salvo que el plan lo pida explícitamente.",
+      "No conviertas probabilidades, utilidad, miedo o curiosidad en porcentajes dentro de conversación normal.",
+      "Redacta una sola respuesta natural, breve y coherente en español.",
+      "Si symbolicDraft es torpe, conserva su intención y mejora únicamente la expresión.",
       "Contexto:",
       JSON.stringify(context)
     ].join("\n");
@@ -179,6 +214,6 @@
     if(output)window.setTimeout(()=>print("npc",brain.identity.name+">",output),120);
   };
 
-  window.NpcIntNeuralWeb={state,health,generate};
-  print("system","","puente neuronal web v0.1 cargado · usa /neural on para conectar Nanochat local");
+  window.NpcIntNeuralWeb={state,health,generate,contextFor};
+  print("system","","puente neuronal web v0.2 cargado · estado cognitivo + plan de respuesta · usa /neural on para Nanochat local");
 })();
