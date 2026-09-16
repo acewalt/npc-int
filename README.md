@@ -1,88 +1,165 @@
 # npc-int
 
-`npc-int` es una base experimental para NPCs con comportamiento cognitivo local y explicable, pensada para integrarse después en Unity.
+`npc-int` es un experimento de NPC cognitivo local, pensado para terminar integrado en Unity. El objetivo no es simular consciencia real, sino construir un personaje que conserve identidad, memoria, conocimiento, estado interno, relaciones, objetivos y decisiones de forma separada y depurable.
 
-La meta no es simular consciencia real. La meta es construir un agente de juego que **mantenga identidad, memoria, necesidades, relación, estado emocional, pensamientos de depuración, objetivos y decisiones**, y que pueda hablar incluso cuando nadie le acaba de preguntar nada.
-
-## Arquitectura v0.1
-
-El cerebro está dividido en capas deliberadamente separadas:
-
-1. **Percepción** — recibe mensajes del jugador, eventos del mundo o el paso del tiempo.
-2. **Memoria** — conserva episodios y recupera recuerdos por similitud de palabras.
-3. **Modelo de sí mismo** — nombre, tipo, rol, propósito, valores y descripción propia.
-4. **Estado interno** — impulsos como sociabilidad, curiosidad, fatiga, propósito, autonomía y amenaza.
-5. **Relación** — familiaridad, confianza, afinidad y datos aprendidos sobre el interlocutor.
-6. **Pensamiento** — produce observaciones internas estructuradas: observación, recuerdo, evaluación, meta y reflexión.
-7. **Decisión** — escoge entre hablar, preguntar, observar, investigar o permanecer en silencio.
-8. **Lenguaje** — convierte la decisión en una frase. En esta versión es local y determinista; luego puede sustituirse por un LLM local.
-
-La separación importa: un LLM podrá redactar mejor, pero **no será quien decida por qué el NPC actúa**.
-
-## Estructura
+## Capas actuales
 
 ```text
-src/NpcInt.Core/          motor C# sin dependencia de Unity
-unity/NpcBrainBehaviour.cs ejemplo de integración MonoBehaviour
-docs/                     laboratorio web / terminal de depuración
-.github/workflows/         despliegue de la demo en GitHub Pages
+entrada del jugador / mundo
+          |
+          v
+lenguaje y gramática ---- diccionario / modismos
+          |
+          v
+contexto conversacional
+          |
+          +---- memoria episódica (lo que vivió)
+          |
+          +---- conocimiento semántico (Wikipedia y packs)
+          |
+          v
+estado interno + objetivos
+          |
+          v
+decisión
+          |
+          v
+respuesta / acción
 ```
 
-## Qué puede hacer ahora
+### Archivos principales
 
-- Responder preguntas básicas sobre quién es, qué es y cuál es su propósito.
-- Recordar el nombre del jugador y preferencias expresadas como `me gusta ...` / `no me gusta ...`.
-- Recuperar recuerdos por similitud léxica.
-- Mantener impulsos internos que cambian con el tiempo.
-- Generar actividad espontánea al pasar tiempo sin interacción.
-- Reaccionar a eventos del mundo.
-- Aprender pares de diálogo al estilo de un SimSimi controlado con `Teach(trigger, response)`.
-- Explicar, para depuración, qué pensamientos internos estructurados llevaron a la acción elegida.
+- `app.js`: cerebro web base, memoria e impulsos.
+- `conversation.js`: intención, contexto entre turnos y anti-repetición.
+- `grammar.js`: análisis y generación gramatical básica en español.
+- `knowledge.js`: conocimiento pequeño, diccionario y Wikipedia online como respaldo.
+- `wiki-packs.js`: búsqueda perezosa en corpus Wikipedia alojado en el repo.
+- `local-wiki.js`: prioriza la Wikipedia local antes de la consulta online.
+- `src/NpcInt.Core/`: núcleo C# sin dependencia de Unity.
+- `unity/NpcBrainBehaviour.cs`: puente mínimo para Unity.
 
-## Prueba web
+## Wikipedia local dividida por temas
 
-La carpeta `docs/` incluye un laboratorio estático. Comandos útiles:
+El repositorio incluye un constructor para generar aproximadamente **300 MiB de texto de Wikipedia** dividido en shards pequeños y por dominios como:
+
+- matemáticas;
+- historia;
+- física;
+- química;
+- biología;
+- medicina;
+- tecnología;
+- informática e IA;
+- astronomía;
+- geografía;
+- filosofía;
+- arte y literatura;
+- lenguaje;
+- sociedad;
+- economía;
+- derecho y política;
+- religión y mitología;
+- deportes;
+- conocimiento general.
+
+La clasificación se configura en `knowledge/topic-map.es.json`.
+
+### Generación local
+
+Descarga el dump `pages-articles` de Wikipedia en español y ejecuta:
+
+```bash
+python tools/build_wikipedia_web.py \
+  eswiki-latest-pages-articles.xml.bz2 \
+  knowledge/wiki \
+  --target-mib 300 \
+  --shard-mib 4
+```
+
+El resultado queda así:
 
 ```text
-/tick 5
-/event Se apagaron las luces del pasillo
-/teach hola => Hola. Ya te estaba esperando.
+knowledge/wiki/
+  manifest.json
+  matematicas/
+    part-00000.index.json
+    part-00000.json
+    ...
+  historia/
+  fisica/
+  ...
+```
+
+La Page **no descarga los 300 MiB al iniciar**. `wiki-packs.js` decide qué tema consultar, carga el índice de ese tema y después únicamente el shard donde se encuentra el fragmento relevante.
+
+### Generación desde GitHub Actions
+
+Existe el workflow manual:
+
+```text
+.github/workflows/build-wikipedia-packs.yml
+```
+
+En GitHub abre **Actions → Build Wikipedia knowledge packs → Run workflow** y deja:
+
+```text
+target_mib = 300
+shard_mib  = 4
+```
+
+El workflow descarga el dump oficial, genera `knowledge/wiki/`, comprueba que ningún archivo se acerque al límite de 100 MiB y hace commit del corpus generado.
+
+## Gramática española
+
+`knowledge/grammar.es.json` contiene conocimiento operativo sobre:
+
+- sujeto, verbo, objetos, atributos y complementos;
+- concordancia sujeto-verbo;
+- concordancia sustantivo-adjetivo;
+- artículos y determinantes;
+- negación;
+- interrogación;
+- conectores;
+- pronombres;
+- tiempos verbales básicos;
+- verbos irregulares frecuentes;
+- patrones de generación de oraciones.
+
+`grammar.js` usa esas reglas para analizar y construir frases. En la terminal:
+
+```text
+/grammar La puerta está cerrada
+/grammar ¿Por qué Andrés cerró la puerta?
+/compose yo | querer | aprender más
+```
+
+La gramática no sustituye un modelo de lenguaje completo. Sirve como estructura explícita para que el NPC pueda interpretar y generar oraciones de manera más consistente mientras el proyecto evoluciona.
+
+## Comandos útiles
+
+```text
+/help
 /state
-/reset
+/thoughts
+/memory
+/knowledge
+/wiki
+/define ajá
+/grammar La puerta está cerrada
+/event se apagaron las luces
+/tick 10
+/auto on
+/auto off
 ```
 
-También puede activarse el modo **Auto**, que hace avanzar el tiempo del agente sin que el usuario escriba.
+## Principio de arquitectura
 
-## Integración en Unity
+El proyecto mantiene separados:
 
-`NpcInt.Core` no usa `UnityEngine`, por lo que puede copiarse a `Assets/NpcInt/Core/`. El archivo `unity/NpcBrainBehaviour.cs` muestra un envoltorio mínimo para un GameObject.
+1. **Memoria episódica**: cosas que el NPC vivió u oyó en la partida.
+2. **Conocimiento semántico**: Wikipedia, manuales, lore y otras fuentes.
+3. **Lexicón**: significado y uso contextual de palabras y modismos.
+4. **Gramática**: reglas sobre cómo se forman e interpretan oraciones.
+5. **Estado interno**: curiosidad, sociabilidad, autonomía, propósito, amenaza, etc.
 
-Ejemplo conceptual:
-
-```csharp
-var brain = new NpcBrain();
-BrainTurn turn = brain.ProcessMessage("¿Quién eres?");
-Debug.Log(turn.Action.Utterance);
-
-BrainTurn idle = brain.Tick(5f);
-if (idle.Action.Kind == ActionKind.Speak)
-    Debug.Log(idle.Action.Utterance);
-```
-
-## Siguiente arquitectura prevista
-
-- memoria persistente JSON/SQLite;
-- memoria episódica + semántica separadas;
-- relaciones diferentes por personaje;
-- percepción de variables reales de Unity (posición, salud, hora, inventario, clima, presencia de otros NPCs);
-- planificador GOAP / utility AI para acciones físicas;
-- emociones con decaimiento y causas;
-- conocimientos del mundo con grados de certeza y posibilidad de creencias falsas;
-- interfaz `ILanguageModel` para Ollama/LM Studio sin acoplar el cerebro a un modelo;
-- conversación entre NPCs;
-- sueños/reflexión offline y consolidación de memoria;
-- herramientas de inspección en Unity Editor.
-
-## GitHub Pages
-
-El workflow incluido publica `docs/` mediante GitHub Pages. GitHub exige habilitar una vez **Settings → Pages → Source → GitHub Actions** para un repositorio nuevo; después los pushes a `main` despliegan automáticamente la demo.
+Esto evita que el NPC confunda “Andrés me dijo X” con “Wikipedia dice X”, o una hipótesis propia con un hecho recuperado de una fuente externa.
