@@ -10,16 +10,31 @@
       perception:c.perception?{type:c.perception.type,text:c.perception.text,tags:c.perception.tags,threat:c.perception.threat}:null,
       mentalState:c.mentalState||null,
       goals:(c.goals||[]).slice(0,5).map(g=>({label:g.label,priority:g.priority,reason:g.reason})),
-      decision:c.decision?{kind:c.decision.id,label:c.decision.label,utility:c.decision.score,risk:c.decision.risk,consequences:c.decision.consequences,conflicts:c.decision.conflicts}:null
+      decision:c.decision?{kind:c.decision.id,label:c.decision.label,utility:c.decision.score,risk:c.decision.risk,consequences:c.decision.consequences,conflicts:c.decision.conflicts}:null,
+      ideaGuidance:c.ideaGuidance||null
     };
   }
   function compactCognitive(){
     const c=brain.cognitiveState?.current;if(!c)return null;
-    return {intent:c.intent,topic:c.topic,goal:c.goal,action:c.action,certainty:c.certainty,beliefs:(c.beliefs||[]).slice(0,6),unresolved:(c.unresolved||[]).slice(0,4),workingMemory:(c.workingMemory||[]).slice(0,9)};
+    return {intent:c.intent,topic:c.topic,goal:c.goal,action:c.action,certainty:c.certainty,beliefs:(c.beliefs||[]).slice(0,6),unresolved:(c.unresolved||[]).slice(0,4),workingMemory:(c.workingMemory||[]).slice(0,9),idea:c.idea||null};
   }
   function compactResponsePlan(){
     const p=brain.responsePlanner?.lastPlan;if(!p)return null;
     return {intent:p.intent,act:p.act,content:p.content,uncertainty:p.uncertainty,justify:p.justify,detail:p.detail,followUp:p.followUp,exposeMetrics:p.exposeMetrics,repetition:p.repetition};
+  }
+  function compactIdea(){
+    const i=brain.ideaEngine?.current;if(!i)return null;
+    return {
+      focus:i.focus,
+      synthesis:i.synthesis,
+      critique:i.critique,
+      recommendedTest:i.recommendedTest,
+      recommendedAction:i.recommendedAction,
+      hypotheses:(i.hypotheses||[]).slice(0,5).map(h=>({
+        claim:h.claim,status:h.status,confidence:h.confidence,
+        evidenceFor:(h.evidenceFor||[]).slice(0,3),evidenceAgainst:(h.evidenceAgainst||[]).slice(0,2),test:h.test
+      }))
+    };
   }
   function compactNlp(){
     const a=brain.nlp?.lastAnalysis;
@@ -49,6 +64,7 @@
       nlp:compactNlp(),
       mind:compactCycle(),
       cognitiveState:compactCognitive(),
+      ideaState:compactIdea(),
       responsePlan:compactResponsePlan(),
       discourse:brain.discourse?{previousUser:brain.discourse.previousUser,previousNpc:brain.discourse.previousNpc,lastInterpretation:brain.discourse.lastInterpretation,lastCommitment:brain.discourse.lastCommitment,lastRegistered:brain.discourse.lastRegistered}:null,
       memory:compactMemory(),
@@ -75,6 +91,8 @@
       "El motor cognitivo ya decidió qué comprende, qué cree, qué objetivo tiene y qué debe comunicar.",
       "RESPETA responsePlan: no cambies su acto comunicativo ni inventes una acción física diferente.",
       "Si existe nlp.semantic, úsalo como interpretación lingüística prioritaria: intención, predicado, roles, entidades y coreferencias ya fueron analizados.",
+      "Si existe ideaState, distingue estrictamente observación, hipótesis y conclusión. Una hipótesis con status=unverified NO es un hecho.",
+      "Puedes combinar y redactar con naturalidad la síntesis, crítica y prueba de ideaState, pero no aumentar su certeza ni inventar evidencia.",
       "Usa cognitiveState solo para continuidad y contexto; no enumeres el JSON ni expongas métricas internas salvo que el plan lo pida.",
       "No conviertas probabilidades, utilidad, miedo o curiosidad en porcentajes dentro de conversación normal.",
       "Redacta una sola respuesta natural, breve y coherente en español.",
@@ -82,7 +100,7 @@
       "Contexto:",JSON.stringify(context)
     ].join("\n");
     try{
-      const r=await fetch(state.endpoint+"/v1/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({task:"utterance",prompt,context,maxTokens:180,temperature:.55,topK:50})});
+      const r=await fetch(state.endpoint+"/v1/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({task:"utterance",prompt,context,maxTokens:200,temperature:.55,topK:50})});
       if(!r.ok)throw new Error(`HTTP ${r.status}`);const d=await r.json();if(!d.ok||!d.text)throw new Error(d.error||"respuesta neuronal vacía");
       state.backend=d.backend||state.backend;state.model=d.model||state.model;state.lastError=null;return String(d.text).trim();
     }catch(err){state.ready=false;state.lastError=String(err?.message||err);return null;}
@@ -115,5 +133,5 @@
   };
 
   window.NpcIntNeuralWeb={state,health,generate,contextFor};
-  print("system","","puente neuronal web v0.3 cargado · NLP + estado cognitivo + plan de respuesta · /neural on");
+  print("system","","puente neuronal web v0.4 cargado · NLP + cognición + hipótesis/ideas + plan de respuesta · /neural on");
 })();
