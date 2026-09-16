@@ -1,0 +1,13 @@
+{
+  "name":"npc-int starter lexicon es",
+  "entries":[
+    {"word":"ajá","variants":["aja","ajá"],"meanings":["interjección de confirmación, seguimiento o invitación a continuar"],"contexts":["puede equivaler a 'sí', 'entiendo', 'continúa' o expresar que se espera una explicación"],"register":"coloquial"},
+    {"word":"qué onda","variants":["que onda","qué onda"],"meanings":["saludo o pregunta informal equivalente a 'qué tal' o 'qué pasa'"],"contexts":["normalmente no pide una explicación literal sobre una onda"],"register":"coloquial"},
+    {"word":"chévere","variants":["chevere","chévere"],"meanings":["agradable, bueno o excelente"],"contexts":["muy usado en varios países de América Latina"],"register":"coloquial"},
+    {"word":"bacano","variants":["bacano","bacana"],"meanings":["bueno, agradable, interesante o admirable"],"contexts":["uso coloquial frecuente en Colombia"],"register":"coloquial"},
+    {"word":"parce","variants":["parce","parcero","parcera"],"meanings":["amigo, compañero o forma informal de dirigirse a otra persona"],"contexts":["coloquial en Colombia; el tono depende de la relación"],"register":"coloquial"},
+    {"word":"vaina","variants":["vaina"],"meanings":["palabra comodín que puede referirse a una cosa, asunto, problema o situación"],"contexts":["su significado preciso depende mucho de la frase y del país"],"register":"coloquial"},
+    {"word":"pelao","variants":["pelao","pelado","pelá","pelaa"],"meanings":["persona joven o muchacho en ciertos usos regionales"],"contexts":["el sentido cambia según región; no debe interpretarse siempre literalmente como 'sin pelo'"],"register":"regional/coloquial"},
+    {"word":"no sé","variants":["no se","no sé","ni idea","no tengo idea"],"meanings":["expresión de incertidumbre o falta de conocimiento"],"contexts":["si responde a una pregunta anterior, debe cerrar o mantener abierta esa incertidumbre en vez de tratarla como un tema nuevo"],"register":"general"}
+  ]
+}
