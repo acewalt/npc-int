@@ -8,6 +8,11 @@ on:
       - "semantic-interpreter.js"
       - "nlp-web.js"
       - "understanding.js"
+      - "response-planner.js"
+      - "src/NpcInt.Core/NlpModels.cs"
+      - "src/NpcInt.Core/NpcBrain.cs"
+      - "unity/NlpBridgeClient.cs"
+      - "unity/NpcBrainBehaviour.cs"
       - "tests/semantic-interpreter-smoke.js"
       - ".github/workflows/nlp-ci.yml"
   pull_request:
@@ -16,6 +21,11 @@ on:
       - "semantic-interpreter.js"
       - "nlp-web.js"
       - "understanding.js"
+      - "response-planner.js"
+      - "src/NpcInt.Core/NlpModels.cs"
+      - "src/NpcInt.Core/NpcBrain.cs"
+      - "unity/NlpBridgeClient.cs"
+      - "unity/NpcBrainBehaviour.cs"
       - "tests/semantic-interpreter-smoke.js"
       - ".github/workflows/nlp-ci.yml"
   workflow_dispatch:
