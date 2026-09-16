@@ -27,7 +27,7 @@
 
   function extractDestination(n){
     let m=n.match(/^(?:quiero |podemos |vamos a )?llevar(?:nos|me|te)? a (.+)$/);
-    if(!m)m=n.match(/^llev(?:a|ame|anos|anos|eme) a (.+)$/);
+    if(!m)m=n.match(/^llev(?:a|ame|anos|eme) a (.+)$/);
     return m?m[1].trim():null;
   }
 
@@ -36,10 +36,8 @@
     const opinionTopic=extractOpinionTopic(n);
     const creationTarget=extractCreationTarget(n);
     const destination=extractDestination(n);
-
     let intent=null,data={};
 
-    // Elipsis social: «yo bien, ¿y tú?» sigue siendo una pregunta de estado.
     if(/^(?:yo )?(?:estoy )?(?:muy )?bien(?: todo bien)? y tu$/.test(n) || /^(?:todo )?bien y tu$/.test(n) || /^(y tu|como estas|como te sientes|que tal estas)$/.test(n)){
       intent="ask_self_state";
     }
@@ -76,22 +74,17 @@
     else if(opinionTopic){
       intent="ask_opinion_about";data.topic=opinionTopic;
     }
-
     return {raw:text,canonical:n,intent,...data};
   }
 
   function substantiveTopic(b){
     const a=ensure(b);
     if(a.lastSubstantiveTopic)return a.lastSubstantiveTopic;
-    const candidates=[
-      b.pragmatics?.meaningfulTopic,
-      b.discourse?.lastRegistered?.source,
-      b.dialogue?.topic
-    ].filter(Boolean);
+    const candidates=[b.pragmatics?.meaningfulTopic,b.discourse?.lastRegistered?.source,b.dialogue?.topic].filter(Boolean);
     for(const x of candidates){
       const n=ANorm(x);
       if(!n || /^(paso del tiempo|hola|vale|ok|no|si)$/.test(n))continue;
-      if(/^(que|como|donde|cuando|por que|porque)\b/.test(n))continue;
+      if(/^(que|como|donde|cuando|por que|porque|yo bien|bien y tu|y tu|contexto de que)\b/.test(n))continue;
       return x;
     }
     return null;
@@ -99,15 +92,18 @@
 
   function capture(b){
     const a=ensure(b);
-    const idea=b.ideaEngine||null;
-    const hyp=b.hypothesisEngine||null;
-    const graph=b.conceptGraph||null;
+    const idea=b.ideaEngine||null,hyp=b.hypothesisEngine||null,graph=b.conceptGraph||null;
     const plan=b.responsePlanner?.lastPlan||null;
     const previousNpc=b.dialogue?.lastNpc || b.discourse?.previousNpc || a.lastReply || "";
     const cognitive=b.cognitiveState||null;
     const previousTopic=substantiveTopic(b);
     return {
       previousNpc,previousPlan:plan,previousTopic,
+      pragmaticsTopic:b.pragmatics?.meaningfulTopic||null,
+      dialogueTopic:b.dialogue?.topic||null,
+      discourseFocusLength:Array.isArray(b.discourse?.focus)?b.discourse.focus.length:null,
+      discourseLastRegistered:b.discourse?.lastRegistered||null,
+      discourseLastCommitment:b.discourse?.lastCommitment||null,
       cognitiveCurrent:cognitive?.current||null,
       ideaCurrent:idea?.current||null,ideaHistoryLength:idea?.history?.length,
       hypothesisCurrent:hyp?.current||null,hypothesisHistoryLength:hyp?.history?.length,
@@ -116,8 +112,16 @@
   }
 
   function restoreReasoningState(b,pre,frame){
-    // Una pregunta sobre NIA o sobre la conversación no es un evento del mundo.
-    // Conservamos el turno, pero evitamos que sustituya el foco causal activo.
+    // El metaturno sigue en el historial conversacional, pero no reemplaza el
+    // foco pragmático, discursivo, causal ni la idea que estaba siendo evaluada.
+    if(b.pragmatics)b.pragmatics.meaningfulTopic=pre.pragmaticsTopic;
+    if(b.dialogue)b.dialogue.topic=pre.dialogueTopic;
+    if(b.discourse){
+      if(Array.isArray(b.discourse.focus)&&Number.isInteger(pre.discourseFocusLength))b.discourse.focus.length=Math.min(b.discourse.focus.length,pre.discourseFocusLength);
+      b.discourse.lastRegistered=pre.discourseLastRegistered;
+      b.discourse.lastCommitment=pre.discourseLastCommitment;
+    }
+
     const s=b.cognitiveState?.current;
     if(s){
       s.intent=frame.intent;
@@ -128,10 +132,8 @@
         s.workingMemory=s.workingMemory.filter(x=>!(x.kind==="topic"&&ANorm(x.text)===current) && !(x.kind==="unknown"&&ANorm(x.text).includes(current)));
         if(pre.previousTopic&&!s.workingMemory.some(x=>x.kind==="topic"&&ANorm(x.text)===ANorm(pre.previousTopic)))s.workingMemory.push({kind:"topic",text:pre.previousTopic,weight:.82});
       }
-      if(b.cognitiveState){
-        b.cognitiveState.workingMemory=s.workingMemory||[];
-        b.cognitiveState.unresolved=s.unresolved||[];
-      }
+      b.cognitiveState.workingMemory=s.workingMemory||[];
+      b.cognitiveState.unresolved=s.unresolved||[];
     }
 
     const idea=b.ideaEngine;
@@ -156,9 +158,7 @@
 
   function stateAnswer(b){
     const mood=typeof b.moodLabel==="function"?ANorm(b.moodLabel()):"neutral";
-    const fear=b.mind?.affect?.fear;
-    const energy=b.mind?.needs?.energy;
-    const curiosity=b.mind?.cognition?.curiosity;
+    const fear=b.mind?.affect?.fear,energy=b.mind?.needs?.energy,curiosity=b.mind?.cognition?.curiosity;
     let lead="Estoy tranquilo y atento.";
     if((typeof fear==="number"&&fear>.62)||/alert|miedo|tenso/.test(mood))lead="Estoy alerta; mi estado interno marca bastante tensión.";
     else if((typeof energy==="number"&&energy<.3)||/cans|fatig/.test(mood))lead="Estoy con poca energía, pero sigo atento a la conversación.";
@@ -173,9 +173,7 @@
     if(b.cognition)parts.push("usar hechos y relaciones para razonar");
     if(b.ideaEngine||b.hypothesisEngine)parts.push("comparar hipótesis y proponer cómo comprobarlas");
     if(b.mind)parts.push("evaluar objetivos, riesgo y opciones antes de elegir una acción simbólica");
-    let out=parts.join(", ")+".";
-    out+=" En esta Page no puedo mover un cuerpo ni ejecutar acciones físicas por mi cuenta; esas acciones necesitan estar conectadas al mundo de Unity.";
-    return out;
+    return parts.join(", ")+". En esta Page no puedo mover un cuerpo ni ejecutar acciones físicas por mi cuenta; esas acciones necesitan estar conectadas al mundo de Unity.";
   }
 
   function knowledgeSummary(b){
@@ -228,24 +226,15 @@
   }
 
   function evidenceAbout(b,topic){
-    const q=ANorm(topic),tokens=q.split(" ").filter(x=>x.length>2);
-    const hits=[];
-    const seen=new Set();
-    const add=(text,kind)=>{
-      text=String(text||"").trim();const n=ANorm(text);
-      if(!text||seen.has(n)||!tokens.some(t=>n.includes(t)))return;
-      seen.add(n);hits.push({text,kind});
-    };
+    const q=ANorm(topic),tokens=q.split(" ").filter(x=>x.length>2),hits=[],seen=new Set();
+    const add=(text,kind)=>{text=String(text||"").trim();const n=ANorm(text);if(!text||seen.has(n)||!tokens.some(t=>n.includes(t)))return;seen.add(n);hits.push({text,kind});};
     for(const f of [...(b.cognition?.facts||[])].reverse())add(`${f.subject} ${f.predicate} ${f.object}`,"hecho");
     for(const m of [...(b.mem||[])].reverse()){
       if(["dialogue","npc-speech"].includes(m.type))continue;
       if(["fact","knowledge","learned","social","world"].includes(m.type))add(m.text,m.type);
       if(hits.length>=4)break;
     }
-    try{
-      const k=globalThis.npcKnowledge?.encyclopediaMatch?.(topic);
-      if(k&&k.score>.72)add(`${k.entry.title}: ${k.entry.text}`,"conocimiento");
-    }catch(_){ }
+    try{const k=globalThis.npcKnowledge?.encyclopediaMatch?.(topic);if(k&&k.score>.72)add(`${k.entry.title}: ${k.entry.text}`,"conocimiento");}catch(_){ }
     return hits.slice(0,3);
   }
 
@@ -266,7 +255,7 @@
       case "ask_creation_preference":return creationPreference(b);
       case "ask_creation_method":return creationMethod(frame.target);
       case "ask_destination":return destinationAnswer(b);
-      case "destination_proposal": {
+      case "destination_proposal":{
         const a=ensure(b);a.destination=frame.destination;a.lastContextItem=`destino propuesto: ${frame.destination}`;
         return `Entiendo: propones ${frame.destination} como destino. Lo conservaré como una propuesta tuya, no como una decisión que yo haya inventado.`;
       }
@@ -298,13 +287,11 @@
   NpcBrain.prototype.hear=function(text){
     const frame=classify((text||"").trim());
     if(!frame.intent)return oldHear.call(this,text);
-
     const pre=capture(this);
     const originalSay=this.say;
     this.say=function(x){return x;};
     let lower;
     try{lower=oldHear.call(this,text);}catch(err){this.say=originalSay;throw err;}
-
     const finish=()=>{
       this.say=originalSay;
       restoreReasoningState(this,pre,frame);
@@ -317,5 +304,5 @@
 
   ensure(brain);
   window.NpcIntConversationArbiter={classify,stateAnswer,capabilitiesAnswer,knowledgeSummary,opinionAnswer};
-  print("system","","árbitro conversacional v1.0 cargado · yo/contexto/capacidades/destino/opinión · metaturnos ≠ eventos del mundo");
+  print("system","","árbitro conversacional v1.1 cargado · yo/contexto/capacidades/destino/opinión · metaturnos ≠ eventos del mundo");
 })();
