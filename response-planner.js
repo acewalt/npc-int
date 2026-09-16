@@ -18,21 +18,31 @@
     return null;
   }
 
+  function currentSemantic(b,text){
+    if(b.nlp?.lastText===text&&b.nlp?.lastSemantic)return b.nlp.lastSemantic;
+    return b.understanding?.lastFrame?.semantic||null;
+  }
+
   function frameFor(b,text){
     let d=null;
     try{d=window.NpcIntDialogueManager?.classify?.(text)||null;}catch(_){ }
     const u=b.understanding?.lastFrame;
+    const semantic=currentSemantic(b,text);
+    const intent=semantic?.intent || u?.intent || d?.intent || localIntent(text) || null;
     return {
-      intent:d?.intent || u?.intent || localIntent(text) || null,
-      canonical:d?.canonical || u?.canonical || RNorm(text),
-      repetition:d?.intent && b.dialogueManager?.lastIntent===d.intent ? Math.max(1,b.dialogueManager?.sameIntentCount||1) : 1
+      intent,
+      canonical:u?.canonical || d?.canonical || RNorm(text),
+      source:semantic?.intent?"semantic-nlp":u?.source||"dialogue-fallback",
+      repetition:intent&&b.dialogueManager?.lastIntent===intent ? Math.max(1,b.dialogueManager?.sameIntentCount||1) : 1
     };
   }
 
   function stateFor(b,text){
     try{
       const api=window.NpcIntCognitiveState;
-      if(api?.refresh)return api.refresh(b,text,{intent:b.dialogueManager?.lastIntent||b.understanding?.lastFrame?.intent||null});
+      const semantic=currentSemantic(b,text);
+      const intent=semantic?.intent||b.understanding?.lastFrame?.intent||b.dialogueManager?.lastIntent||null;
+      if(api?.refresh)return api.refresh(b,text,{intent,semantic});
     }catch(_){ }
     return b.cognitiveState?.current||null;
   }
@@ -76,6 +86,7 @@
       time:b.time||0,
       input:text,
       intent:frame.intent,
+      intentSource:frame.source,
       act:"passthrough",
       content:{topic,action,goal},
       uncertainty:state?.unresolved?.slice?.(0,3)||[],
@@ -206,13 +217,14 @@
     if(b.cognitiveState?.current)b.cognitiveState.current.responsePlan={
       act:p.act,content:p.content,uncertainty:p.uncertainty,detail:p.detail,justify:p.justify
     };
-    if(Array.isArray(b.lastThoughts))b.lastThoughts.push(`PLAN DE RESPUESTA: acto=${p.act}; detalle=${p.detail}; métricas=${p.exposeMetrics?"sí":"no"}`);
+    if(Array.isArray(b.lastThoughts))b.lastThoughts.push(`PLAN DE RESPUESTA: acto=${p.act}; fuente=${p.intentSource||"—"}; detalle=${p.detail}; métricas=${p.exposeMetrics?"sí":"no"}`);
   }
 
   function formatPlan(p){
     if(!p)return "Todavía no existe un plan de respuesta.";
     return [
       `intención=${p.intent||"—"}`,
+      `fuente intención=${p.intentSource||"—"}`,
       `acto comunicativo=${p.act}`,
       `tema=${p.content.topic||"—"}`,
       `acción=${p.content.action||"—"}`,
@@ -230,8 +242,8 @@
   const oldReset=NpcBrain.prototype.reset;
   NpcBrain.prototype.reset=function(){oldReset.call(this);this.responsePlanner=null;ensurePlanner(this);};
 
-  // Árbitro final del lenguaje simbólico. Las capas inferiores siguen pensando y
-  // actualizando memoria, pero no publican directamente una frase al usuario.
+  // Árbitro final del lenguaje simbólico. La intención semántica NLP tiene
+  // precedencia; las capas de regex quedan como respaldo.
   const oldHear=NpcBrain.prototype.hear;
   NpcBrain.prototype.hear=function(text){
     ensurePlanner(this);
@@ -262,5 +274,5 @@
 
   ensurePlanner(brain);
   window.NpcIntResponsePlanner={buildPlan,verbalize,formatPlan};
-  print("system","","planificador de respuesta v0.1 cargado · pensamiento separado de lenguaje · salida sin métricas internas");
+  print("system","","planificador de respuesta v0.2 cargado · NLP semántico → plan → lenguaje · salida sin métricas internas");
 })();
