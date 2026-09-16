@@ -5,7 +5,7 @@ using NpcInt.Core;
 using UnityEngine;
 
 // Puente principal entre NpcInt.Core y Unity.
-// Añade NlpBridgeClient al mismo GameObject para análisis lingüístico neuronal local.
+// El orden deliberado es: lenguaje -> cerebro -> ciclo mental -> ideas -> companion -> salida.
 public sealed class NpcBrainBehaviour : MonoBehaviour
 {
     [Header("Simulation")]
@@ -21,18 +21,24 @@ public sealed class NpcBrainBehaviour : MonoBehaviour
     [SerializeField] private bool useIdeaFormation = true;
     [SerializeField] private bool logIdeas = true;
 
+    [Header("Companion / Social")]
+    [SerializeField] private bool useCompanionEngine = true;
+    [SerializeField] private bool logCompanionState = false;
+
     [Header("Debug")]
     [SerializeField] private bool logSymbolicSpeech = true;
 
     private NpcBrain _brain;
     private MentalCycleEngine _mind;
     private IdeaFormationEngine _ideas;
+    private CompanionEngine _companion;
     private float _timer;
     private readonly SemaphoreSlim _hearGate = new SemaphoreSlim(1, 1);
 
     public NpcBrain Brain { get { return _brain; } }
     public MentalCycleEngine Mind { get { return _mind; } }
     public IdeaFormationEngine Ideas { get { return _ideas; } }
+    public CompanionEngine Companion { get { return _companion; } }
     public MentalCycleResult LastMentalCycle { get { return _mind != null ? _mind.LastCycle : null; } }
     public NpcIdea LastIdea { get; private set; }
     public NlpAnalysis LastNlpAnalysis { get; private set; }
@@ -42,14 +48,17 @@ public sealed class NpcBrainBehaviour : MonoBehaviour
     public event Action<BrainTurn, MentalCycleResult> TurnCompleted;
     // Permite inspeccionar/registrar el análisis lingüístico previo a la decisión.
     public event Action<NlpAnalysis, DialogueAct> LanguageAnalyzed;
-    // Expone la nueva síntesis causal a UI, debug, memoria externa o un planner físico.
+    // Expone la síntesis causal a UI, debug, memoria externa o un planner físico.
     public event Action<NpcIdea> IdeaFormed;
+    // Permite UI/debug reaccionar a cambios del modelo social.
+    public event Action<CompanionState> CompanionStateChanged;
 
     private void Awake()
     {
         _brain = new NpcBrain(GetInstanceID());
         _mind = new MentalCycleEngine(_brain);
         _ideas = new IdeaFormationEngine();
+        _companion = new CompanionEngine();
         if (nlpBridge == null) nlpBridge = GetComponent<NlpBridgeClient>();
         Debug.Log("NPC brain initialized: " + _brain.DescribeState());
     }
@@ -60,8 +69,19 @@ public sealed class NpcBrainBehaviour : MonoBehaviour
         if (_timer < secondsPerBrainTick) return;
         _timer = 0f;
 
+        if (useCompanionEngine) _companion.Advance(simulatedMinutesPerTick);
+
         BrainTurn turn = _brain.Tick(simulatedMinutesPerTick);
         MentalCycleResult cycle = _mind.ThinkTime(simulatedMinutesPerTick);
+
+        // El cerebro base puede producir monólogos de inactividad. El CompanionEngine
+        // decide si hay una razón social real para hablar o si el silencio aporta más.
+        if (useCompanionEngine)
+        {
+            turn.Action = _companion.AdaptIdleAction(_brain, turn.Action);
+            ObserveCompanionReply(turn);
+        }
+
         CompleteTurn(turn, cycle);
     }
 
@@ -107,6 +127,8 @@ public sealed class NpcBrainBehaviour : MonoBehaviour
                 }
             }
 
+            if (useCompanionEngine) _companion.ObserveUserTurn(_brain, text);
+
             string ideaIntent = ClassifyIdeaIntent(text, act);
 
             BrainTurn turn = act != null
@@ -126,6 +148,14 @@ public sealed class NpcBrainBehaviour : MonoBehaviour
                     turn.Action.Reason = "respuesta construida desde hipótesis, crítica y síntesis causal";
                     turn.Action.Utility = 0.90f;
                 }
+            }
+
+            // Último árbitro simbólico: conserva la decisión cognitiva, pero añade
+            // continuidad de relación, memoria social y naturalidad conversacional.
+            if (useCompanionEngine)
+            {
+                turn.Action = _companion.AdaptConversationAction(_brain, text, turn.Action, act);
+                ObserveCompanionReply(turn);
             }
 
             CompleteTurn(turn, cycle);
@@ -152,6 +182,27 @@ public sealed class NpcBrainBehaviour : MonoBehaviour
     public void SetEnergy(float value)
     {
         _mind.SetNeed("energy", value);
+    }
+
+    public string DescribeCompanionState()
+    {
+        return _companion != null ? _companion.DescribeState() : "companion no inicializado";
+    }
+
+    private void ObserveCompanionReply(BrainTurn turn)
+    {
+        if (_companion == null || turn == null || turn.Action == null) return;
+        if ((turn.Action.Kind == ActionKind.Speak || turn.Action.Kind == ActionKind.AskQuestion) &&
+            !string.IsNullOrWhiteSpace(turn.Action.Utterance))
+        {
+            _companion.ObserveNpcReply(turn.Action.Utterance);
+        }
+
+        if (logCompanionState)
+            Debug.Log(name + " companion: " + _companion.DescribeState());
+
+        Action<CompanionState> handler = CompanionStateChanged;
+        if (handler != null) handler(_companion.State);
     }
 
     private void FormIdea(string focus, MentalCycleResult cycle)
