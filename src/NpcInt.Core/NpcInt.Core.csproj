@@ -4,6 +4,7 @@
     <LangVersion>8.0</LangVersion>
     <Nullable>disable</Nullable>
     <ImplicitUsings>disable</ImplicitUsings>
+    <Deterministic>true</Deterministic>
     <RootNamespace>NpcInt.Core</RootNamespace>
   </PropertyGroup>
 </Project>
