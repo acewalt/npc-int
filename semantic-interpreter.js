@@ -1,0 +1,130 @@
+"use strict";
+
+(function(){
+  const fold=s=>String(s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+
+  function flatTokens(analysis){
+    return (analysis?.sentences||[]).flatMap((s,si)=>(s.tokens||[]).map(t=>({...t,sentence:si})));
+  }
+
+  function lemmas(tokens){return tokens.map(t=>fold(t.lemma||t.text));}
+  function hasLemma(tokens,...xs){const set=new Set(lemmas(tokens));return xs.some(x=>set.has(fold(x)));}
+  function words(tokens){return tokens.map(t=>fold(t.text));}
+  function question(analysis,text){
+    return /[?¿]/.test(text||"") || (analysis?.frames||[]).some(f=>f?.speechType==="question");
+  }
+  function qwords(analysis,tokens){
+    const a=(analysis?.frames||[]).flatMap(f=>f?.questionWords||[]).map(fold);
+    if(a.length)return [...new Set(a)];
+    const qs=new Set(["que","quien","cual","como","cuando","donde","cuanto"]);
+    return lemmas(tokens).filter(x=>qs.has(x));
+  }
+  function predicate(analysis,tokens){
+    const p=(analysis?.frames||[]).map(f=>f?.predicate).find(Boolean);
+    if(p)return p;
+    const t=tokens.find(x=>x.deprel==="root"&&["VERB","AUX"].includes(x.upos)) || tokens.find(x=>["VERB","AUX"].includes(x.upos));
+    return t?{token:t.id,text:t.text,lemma:t.lemma||t.text,upos:t.upos,feats:t.feats||{}}:null;
+  }
+  function secondPerson(tokens){
+    if(tokens.some(t=>String(t.feats?.Person||"")==="2"))return true;
+    const w=new Set(words(tokens));
+    return w.has("tu")||w.has("tú")||w.has("usted");
+  }
+  function futureLike(tokens,pred){
+    if(String(pred?.feats?.Tense||"").toLowerCase()==="fut")return true;
+    for(let i=0;i<tokens.length-2;i++){
+      if(fold(tokens[i].lemma)==="ir" && fold(tokens[i+1].lemma||tokens[i+1].text)==="a" && ["VERB","AUX"].includes(tokens[i+2].upos))return true;
+    }
+    return false;
+  }
+  function objectSlots(analysis,tokens){
+    const roles=(analysis?.frames||[]).flatMap(f=>f?.roles||[]);
+    return {
+      agent:roles.find(r=>r.role==="agent")?.text||null,
+      patient:roles.find(r=>r.role==="patient")?.text||null,
+      recipient:roles.find(r=>r.role==="recipient")?.text||null,
+      circumstances:roles.filter(r=>["circumstance","time","location"].includes(r.role)).map(r=>r.text)
+    };
+  }
+
+  function inferIntent(text,analysis){
+    const tokens=flatTokens(analysis);
+    const ls=lemmas(tokens), ws=words(tokens);
+    const isQ=question(analysis,text);
+    const q=qwords(analysis,tokens);
+    const pred=predicate(analysis,tokens);
+    const target2=secondPerson(tokens);
+    const has=x=>ls.includes(fold(x));
+    const any=(...xs)=>xs.some(has);
+    const contains=(...xs)=>xs.every(x=>ws.includes(fold(x))||ls.includes(fold(x)));
+    let intent=null,confidence=.58,basis=[];
+
+    const normalized=fold(text).replace(/[^a-z0-9ñáéíóúü ]/g," ").replace(/\s+/g," ").trim();
+    if(/^(mm+|hm+|hmm+|aja|ajá|uhm+)$/.test(normalized))return {intent:"backchannel",confidence:.99,basis:["discourse-marker"]};
+    if(/^(vale|ok|okay|listo|de acuerdo|entendido)$/.test(normalized))return {intent:"ack",confidence:.98,basis:["acknowledgement"]};
+    if(/^(hola|buenas|hey|ey|que onda|qué onda|que tal|qué tal)$/.test(normalized))return {intent:"greeting",confidence:.98,basis:["greeting"]};
+
+    if(isQ && any("recordar") && target2){intent="ask_memory_semantic";confidence=.93;basis=["question","recordar","2nd-person"];}
+    if(isQ && any("entender","comprender") && target2){intent="ask_understanding";confidence=.94;basis=["question","understand","2nd-person"];}
+    if(isQ && any("registrar") && target2){intent="ask_registered";confidence=.91;basis=["question","registrar","2nd-person"];}
+    if(isQ && (contains("tener","cuenta")||normalized.includes("en cuenta")) && target2){intent="ask_considering";confidence=.9;basis=["tener-en-cuenta","2nd-person"];}
+    if(isQ && any("seguir") && target2){intent="ask_following";confidence=.88;basis=["seguir","2nd-person"];}
+    if(isQ && any("añadir","agregar") && target2){intent="ask_what_add";confidence=.88;basis=["add","2nd-person"];}
+    if(isQ && any("poder","saber") && target2){intent="ask_capabilities";confidence=.91;basis=["modal-capability","2nd-person"];}
+    if(isQ && ws.some(x=>["inteligencia","capacidad","capacidades"].includes(x))){intent="ask_capabilities";confidence=.9;basis=["capability-noun"];}
+    if(isQ && any("querer") && target2){intent="ask_desired_action";confidence=.95;basis=["question","querer","2nd-person"];}
+    if(isQ && any("gustar") && target2){intent="ask_preference";confidence=.9;basis=["question","gustar"];}
+    if(isQ && any("hacer") && target2){
+      intent=futureLike(tokens,pred)||any("ir")?"ask_future_action":"ask_activity";
+      confidence=.95;basis=["question","hacer","2nd-person",intent==="ask_future_action"?"future":"present"];
+    }
+    if(isQ && any("estar","sentir") && target2 && q.includes("como")){intent="ask_state";confidence=.94;basis=["question","state","cómo"];}
+    if(isQ && any("pasar","ocurrir")){intent="ask_situation";confidence=.93;basis=["question","situation"];}
+    if(isQ && ws.includes("informacion") && (ws.includes("para")||ws.includes("por"))){intent="ask_information_purpose";confidence=.88;basis=["information-purpose"];}
+    if(isQ && (q.includes("por que")||normalized.startsWith("por que ")||normalized.startsWith("porque ")) && any("decir","responder","hablar")){intent="ask_reason";confidence=.9;basis=["why","speech-verb"];}
+
+    if(!intent && isQ && q.includes("como") && any("estar")){intent="ask_state";confidence=.76;basis=["question","cómo","estar"];}
+    if(!intent && isQ && normalized==="que pasa"){intent="ask_situation";confidence=.96;basis=["fixed-question"];}
+
+    return {intent,confidence,basis};
+  }
+
+  function interpret(text,analysis,brain){
+    if(!analysis?.sentences?.length)return null;
+    const tokens=flatTokens(analysis);
+    const p=predicate(analysis,tokens);
+    const guess=inferIntent(text,analysis);
+    const frames=analysis.frames||analysis.sentences.map(s=>s.semanticFrame).filter(Boolean);
+    const negated=frames.some(f=>!!f?.negated);
+    const slots=objectSlots(analysis,tokens);
+    const entities=(analysis.entities||[]).map(e=>({text:e.text,type:e.type,start:e.start,end:e.end}));
+    const coreferences=analysis.coreferences||[];
+    const output={
+      source:analysis.backend==="stanza"?"neural-nlp":"hybrid-nlp",
+      backend:analysis.backend||"unknown",
+      model:analysis.model||null,
+      intent:guess.intent,
+      confidence:guess.confidence,
+      basis:guess.basis,
+      speechType:question(analysis,text)?"question":(frames[0]?.speechType||"statement"),
+      predicate:p?{
+        lemma:fold(p.lemma||p.text),text:p.text,
+        tense:p.feats?.Tense||null,mood:p.feats?.Mood||null,
+        person:p.feats?.Person||null,number:p.feats?.Number||null
+      }:null,
+      polarity:negated?"negative":"positive",
+      slots,
+      questionWords:qwords(analysis,tokens),
+      entities,
+      coreferences,
+      roles:frames.flatMap(f=>f?.roles||[]),
+      tokens:tokens.map(t=>({id:t.id,text:t.text,lemma:t.lemma,upos:t.upos,feats:t.feats||{},head:t.head,deprel:t.deprel,ner:t.ner||null,sentence:t.sentence})),
+      rawAnalysis:analysis
+    };
+    if(brain?.discourse?.lastRegistered)output.discourseFocus=brain.discourse.lastRegistered.source||null;
+    return output;
+  }
+
+  window.NpcIntSemanticInterpreter={interpret,inferIntent};
+  print("system","","intérprete semántico v1.0 cargado · UD + lemas + roles + entidades → DialogueAct");
+})();
