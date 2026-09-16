@@ -20,7 +20,7 @@
   }
   function compactResponsePlan(){
     const p=brain.responsePlanner?.lastPlan;if(!p)return null;
-    return {intent:p.intent,act:p.act,content:p.content,uncertainty:p.uncertainty,justify:p.justify,detail:p.detail,followUp:p.followUp,exposeMetrics:p.exposeMetrics,repetition:p.repetition};
+    return {intent:p.intent,act:p.act,content:p.content,uncertainty:p.uncertainty,justify:p.justify,detail:p.detail,followUp:p.followUp,exposeMetrics:p.exposeMetrics,repetition:p.repetition,companion:p.companion||null};
   }
   function compactIdea(){
     const i=brain.ideaEngine?.current;if(!i)return null;
@@ -55,12 +55,36 @@
       }))
     };
   }
+  function compactCompanion(){
+    const r=brain.relationshipModel,p=brain.companionPersonality,t=brain.topicManager,pend=brain.pendingThreads,sm=brain.socialMemory,c=brain.companionState;
+    if(!r&&!p&&!t&&!pend&&!sm&&!c)return null;
+    const profile=window.NpcIntSocialMemory?.profile?.(brain)||null;
+    const active=window.NpcIntTopics?.active?.(brain)||null;
+    const pending=window.NpcIntPending?.best?.(brain)||null;
+    return {
+      relationship:r?{stage:r.stage,familiarity:r.familiarity,trust:r.trust,comfort:r.comfort,rapport:r.rapport,reciprocity:r.reciprocity,tension:r.tension}:null,
+      style:window.NpcIntPersonality?.style?.(brain,{allowQuestion:false})||p?.lastStyle||null,
+      personality:p?{traits:p.traits,values:p.values,preferences:(p.simulatedPreferences||[]).slice(0,5)}:null,
+      socialMemory:profile?{
+        name:profile.name,
+        likes:(profile.likes||[]).slice(0,3).map(x=>x.value),
+        preferences:(profile.preferences||[]).slice(0,3).map(x=>x.value),
+        projects:(profile.projects||[]).slice(0,3).map(x=>x.value),
+        goals:(profile.goals||[]).slice(0,3).map(x=>x.value)
+      }:null,
+      activeTopic:active?{label:active.label,status:active.status,mentions:active.mentions}:null,
+      pending:pending?{kind:pending.kind,text:pending.text,priority:pending.priority}:null,
+      companionPlan:c?.lastPlan||null,
+      initiative:brain.initiativeEngine?.lastCandidate?{type:brain.initiativeEngine.lastCandidate.type,reason:brain.initiativeEngine.lastCandidate.reason,topic:brain.initiativeEngine.lastCandidate.topic}:null
+    };
+  }
 
   function contextFor(userText,symbolicDraft){
     return {
       identity:{name:brain.identity?.name||"NIA-01",kind:brain.identity?.kind||"NPC cognitivo local",purpose:brain.identity?.purpose||"comprender el entorno"},
       input:userText,
       relation:{name:brain.relation?.name||"Jugador",familiarity:brain.relation?.familiarity??0,trust:brain.relation?.trust??0},
+      companion:compactCompanion(),
       nlp:compactNlp(),
       mind:compactCycle(),
       cognitiveState:compactCognitive(),
@@ -87,20 +111,26 @@
     if(!state.ready){const ok=await health(true);if(!ok)return null;}
     const context=contextFor(userText,symbolicDraft);
     const prompt=[
-      "Eres la capa neuronal de lenguaje de NIA-01, un NPC.",
+      "Eres la capa neuronal de lenguaje de NIA-01, un NPC compañero, no una persona humana.",
       "El motor cognitivo ya decidió qué comprende, qué cree, qué objetivo tiene y qué debe comunicar.",
-      "RESPETA responsePlan: no cambies su acto comunicativo ni inventes una acción física diferente.",
+      "RESPETA responsePlan y companion.companionPlan: no cambies su acto comunicativo ni inventes una acción física diferente.",
+      "Usa companion.relationship, companion.style, socialMemory, activeTopic y pending para dar continuidad social SOLO cuando sean relevantes.",
+      "No inventes recuerdos, cercanía, gustos del usuario ni hechos que no aparezcan en companion/socialMemory/memory.",
+      "No conviertas la compañía en dependencia: evita culpa, exclusividad, presión para volver, celos o frases como 'no me dejes'.",
+      "La personalidad de NIA puede mostrarse mediante curiosidad, prudencia, opinión provisional, humor ligero y preferencias simuladas.",
       "Si existe nlp.semantic, úsalo como interpretación lingüística prioritaria: intención, predicado, roles, entidades y coreferencias ya fueron analizados.",
       "Si existe ideaState, distingue estrictamente observación, hipótesis y conclusión. Una hipótesis con status=unverified NO es un hecho.",
       "Puedes combinar y redactar con naturalidad la síntesis, crítica y prueba de ideaState, pero no aumentar su certeza ni inventar evidencia.",
-      "Usa cognitiveState solo para continuidad y contexto; no enumeres el JSON ni expongas métricas internas salvo que el plan lo pida.",
-      "No conviertas probabilidades, utilidad, miedo o curiosidad en porcentajes dentro de conversación normal.",
-      "Redacta una sola respuesta natural, breve y coherente en español.",
+      "No enumeres el JSON ni expongas métricas internas salvo que el plan lo pida.",
+      "No conviertas probabilidades, utilidad, miedo, confianza o curiosidad en porcentajes dentro de conversación normal.",
+      "Evita sonar como documentación técnica. Prefiere lenguaje conversacional, variado y contextual, sin fingir emociones o experiencias humanas reales.",
+      "No termines cada respuesta con una pregunta. Pregunta solo si companion.style/plan sugiere que aporta continuidad.",
+      "Redacta una sola respuesta natural, breve o media según el plan, en español.",
       "Si symbolicDraft es torpe, conserva su intención y mejora únicamente la expresión.",
       "Contexto:",JSON.stringify(context)
     ].join("\n");
     try{
-      const r=await fetch(state.endpoint+"/v1/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({task:"utterance",prompt,context,maxTokens:200,temperature:.55,topK:50})});
+      const r=await fetch(state.endpoint+"/v1/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({task:"utterance",prompt,context,maxTokens:240,temperature:.62,topK:50})});
       if(!r.ok)throw new Error(`HTTP ${r.status}`);const d=await r.json();if(!d.ok||!d.text)throw new Error(d.error||"respuesta neuronal vacía");
       state.backend=d.backend||state.backend;state.model=d.model||state.model;state.lastError=null;return String(d.text).trim();
     }catch(err){state.ready=false;state.lastError=String(err?.message||err);return null;}
@@ -132,6 +162,6 @@
     if(output)window.setTimeout(()=>print("npc",brain.identity.name+">",output),120);
   };
 
-  window.NpcIntNeuralWeb={state,health,generate,contextFor};
-  print("system","","puente neuronal web v0.4 cargado · NLP + cognición + hipótesis/ideas + plan de respuesta · /neural on");
+  window.NpcIntNeuralWeb={state,health,generate,contextFor,compactCompanion};
+  print("system","","puente neuronal web v0.5 cargado · NLP + cognición + ideas + estado social/compañía · /neural on");
 })();
