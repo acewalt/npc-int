@@ -55,6 +55,9 @@ const cases=[
   ["que piensas hacer ahora","ask_future_action"],
   ["que te gustaria hacer","ask_desired_action"],
   ["y que quieres hacer","ask_desired_action"],
+  ["pero que quieres hacer","ask_desired_action"],
+  ["bueno que quieres hacer","ask_desired_action"],
+  ["a ver que quieres hacer","ask_desired_action"],
   ["sigo aqui","presence"],
   ["aqui estoy","presence"],
   ["vale conectalo","directive_with_reference"],
@@ -78,6 +81,15 @@ assert.match(b.hear("que te gustaria hacer"),/me inclino|prioridades|pref/i);
 assert.match(b.hear("vale"),/Vale|Entendido|De acuerdo/);
 assert.match(b.hear("sigo aqui"),/te tengo presente/i);
 assert.match(b.hear("vale conectalo"),/Nanochat|conexión neuronal/i);
+
+const r1=b.hear("que quieres hacer");
+const r2=b.hear("que quieres hacer");
+const r3=b.hear("pero que quieres hacer");
+assert.notStrictEqual(r1,r2,"repetir intención debe refinar, no clonar la respuesta");
+assert.match(r2,/Más directo|quiero/i);
+assert.match(r3,/Más directo|Lo más concreto|quiero/i);
+assert.strictEqual(b.dialogueManager.lastIntent,"ask_desired_action");
+assert.ok(b.dialogueManager.sameIntentCount>=3);
 
 b.time=20;
 b.hear("sigo aqui");
