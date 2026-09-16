@@ -1,0 +1,81 @@
+{
+  "version": 1,
+  "language": "es",
+  "name": "Gramática operativa española para npc-int",
+  "sentenceStructures": [
+    {"id":"sv","pattern":["sujeto","verbo"],"example":"Andrés camina."},
+    {"id":"svc","pattern":["sujeto","verbo_copulativo","atributo"],"example":"La puerta está cerrada."},
+    {"id":"svo","pattern":["sujeto","verbo","objeto_directo"],"example":"NIA observa la puerta."},
+    {"id":"svoi","pattern":["sujeto","verbo","objeto_directo","objeto_indirecto"],"example":"Andrés entrega la llave a NIA."},
+    {"id":"circunstancial","pattern":["sujeto","verbo","complemento_circunstancial"],"example":"NIA espera junto a la puerta."},
+    {"id":"impersonal","pattern":["verbo_impersonal","complemento"],"example":"Hay ruido en el pasillo."}
+  ],
+  "rules": [
+    {"id":"agreement_subject_verb","description":"El verbo concuerda con el sujeto en persona y número."},
+    {"id":"agreement_noun_adjective","description":"El adjetivo suele concordar con el sustantivo en género y número."},
+    {"id":"article_noun","description":"El artículo concuerda con el sustantivo: el/los, la/las, un/unos, una/unas."},
+    {"id":"subject_optional","description":"En español el sujeto puede omitirse cuando la forma verbal permite inferirlo."},
+    {"id":"basic_order","description":"El orden no marcado suele ser sujeto + verbo + complementos, aunque el español permite variación pragmática."},
+    {"id":"negation","description":"La negación básica coloca 'no' delante del verbo conjugado."},
+    {"id":"yes_no_question","description":"Las preguntas totales pueden mantener el orden declarativo y se marcan con entonación y signos ¿?."},
+    {"id":"wh_question","description":"Las preguntas parciales usan interrogativos como qué, quién, cuál, cómo, cuándo, dónde y por qué."},
+    {"id":"punctuation_question","description":"Las preguntas escritas en español deben usar signos de apertura y cierre: ¿...?"},
+    {"id":"punctuation_exclamation","description":"Las exclamaciones escritas usan signos de apertura y cierre: ¡...!"},
+    {"id":"clitic_pronouns","description":"Pronombres átonos como me, te, lo, la, le, nos y se suelen aparecer junto al verbo según la construcción."},
+    {"id":"connectors","description":"Los conectores enlazan proposiciones y expresan relaciones como causa, contraste, consecuencia, condición o adición."}
+  ],
+  "partsOfSpeech": {
+    "sustantivo":"nombra entidades, conceptos, lugares o ideas",
+    "verbo":"expresa acciones, procesos o estados y se flexiona en persona, número, tiempo y modo",
+    "adjetivo":"atribuye propiedades a un sustantivo",
+    "adverbio":"modifica verbos, adjetivos, otros adverbios u oraciones",
+    "pronombre":"sustituye o señala participantes y entidades",
+    "determinante":"introduce y delimita un sustantivo",
+    "preposicion":"relaciona constituyentes: a, ante, bajo, con, contra, de, desde, en, entre, hacia, hasta, para, por, según, sin, sobre, tras",
+    "conjuncion":"conecta palabras, grupos u oraciones",
+    "interjeccion":"expresa una reacción o función discursiva independiente"
+  },
+  "pronouns": {
+    "yo":{"person":1,"number":"singular"},
+    "tu":{"person":2,"number":"singular"},
+    "tú":{"person":2,"number":"singular"},
+    "usted":{"person":3,"number":"singular"},
+    "el":{"person":3,"number":"singular"},
+    "él":{"person":3,"number":"singular"},
+    "ella":{"person":3,"number":"singular"},
+    "nosotros":{"person":1,"number":"plural"},
+    "nosotras":{"person":1,"number":"plural"},
+    "ustedes":{"person":3,"number":"plural"},
+    "ellos":{"person":3,"number":"plural"},
+    "ellas":{"person":3,"number":"plural"}
+  },
+  "connectors": {
+    "addition":["además","también","asimismo"],
+    "contrast":["pero","sin embargo","aunque","en cambio"],
+    "cause":["porque","ya que","debido a que"],
+    "consequence":["por eso","por lo tanto","así que"],
+    "condition":["si","siempre que","a menos que"],
+    "sequence":["primero","después","luego","finalmente"],
+    "example":["por ejemplo"],
+    "reformulation":["es decir","en otras palabras"]
+  },
+  "interrogatives":["qué","quién","quiénes","cuál","cuáles","cómo","cuándo","dónde","por qué","cuánto","cuánta","cuántos","cuántas"],
+  "commonVerbs": {
+    "ser":{"present":{"1s":"soy","2s":"eres","3s":"es","1p":"somos","3p":"son"},"past":{"1s":"fui","2s":"fuiste","3s":"fue","1p":"fuimos","3p":"fueron"},"future":{"1s":"seré","2s":"serás","3s":"será","1p":"seremos","3p":"serán"}},
+    "estar":{"present":{"1s":"estoy","2s":"estás","3s":"está","1p":"estamos","3p":"están"},"past":{"1s":"estuve","2s":"estuviste","3s":"estuvo","1p":"estuvimos","3p":"estuvieron"},"future":{"1s":"estaré","2s":"estarás","3s":"estará","1p":"estaremos","3p":"estarán"}},
+    "tener":{"present":{"1s":"tengo","2s":"tienes","3s":"tiene","1p":"tenemos","3p":"tienen"},"past":{"1s":"tuve","2s":"tuviste","3s":"tuvo","1p":"tuvimos","3p":"tuvieron"},"future":{"1s":"tendré","2s":"tendrás","3s":"tendrá","1p":"tendremos","3p":"tendrán"}},
+    "querer":{"present":{"1s":"quiero","2s":"quieres","3s":"quiere","1p":"queremos","3p":"quieren"},"past":{"1s":"quise","2s":"quisiste","3s":"quiso","1p":"quisimos","3p":"quisieron"},"future":{"1s":"querré","2s":"querrás","3s":"querrá","1p":"querremos","3p":"querrán"}},
+    "poder":{"present":{"1s":"puedo","2s":"puedes","3s":"puede","1p":"podemos","3p":"pueden"},"past":{"1s":"pude","2s":"pudiste","3s":"pudo","1p":"pudimos","3p":"pudieron"},"future":{"1s":"podré","2s":"podrás","3s":"podrá","1p":"podremos","3p":"podrán"}},
+    "saber":{"present":{"1s":"sé","2s":"sabes","3s":"sabe","1p":"sabemos","3p":"saben"},"past":{"1s":"supe","2s":"supiste","3s":"supo","1p":"supimos","3p":"supieron"},"future":{"1s":"sabré","2s":"sabrás","3s":"sabrá","1p":"sabremos","3p":"sabrán"}},
+    "ir":{"present":{"1s":"voy","2s":"vas","3s":"va","1p":"vamos","3p":"van"},"past":{"1s":"fui","2s":"fuiste","3s":"fue","1p":"fuimos","3p":"fueron"},"future":{"1s":"iré","2s":"irás","3s":"irá","1p":"iremos","3p":"irán"}}
+  },
+  "generation": {
+    "inform":["{subject} {verb} {complement}.","{subject} {verb} {object} {complement}."],
+    "state":["{subject} {copula} {attribute}.","Ahora {subject} {copula} {attribute}."],
+    "negation":["{subject} no {verb} {complement}."],
+    "question":["¿{interrogative} {verb} {subject} {complement}?","¿{verb} {subject} {complement}?"],
+    "cause":["{clause1} porque {clause2}.","{clause1}; por eso, {clause2}."],
+    "contrast":["{clause1}, pero {clause2}."],
+    "uncertainty":["No sé si {clause}.","Es posible que {clause}.","No tengo suficiente información para afirmar que {clause}."]
+  }
+}
