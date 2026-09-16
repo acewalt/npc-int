@@ -1,0 +1,14 @@
+{
+  "name":"npc-int starter encyclopedia es",
+  "license":"Proyecto de prueba; sustituible por packs importados desde fuentes compatibles",
+  "entries":[
+    {"id":"ia","title":"Inteligencia artificial","aliases":["IA","inteligencia artificial"],"text":"La inteligencia artificial es un campo de la informática que desarrolla sistemas capaces de realizar tareas asociadas con percepción, aprendizaje, razonamiento, planificación, lenguaje y toma de decisiones.","tags":["informática","IA"]},
+    {"id":"ml","title":"Aprendizaje automático","aliases":["machine learning","ML","aprendizaje automático"],"text":"El aprendizaje automático estudia métodos que ajustan modelos a partir de datos para realizar predicciones, clasificaciones u otras tareas sin especificar manualmente cada regla de comportamiento.","tags":["IA","datos"]},
+    {"id":"nn","title":"Red neuronal artificial","aliases":["red neuronal","redes neuronales","neural network"],"text":"Una red neuronal artificial es un modelo computacional compuesto por unidades conectadas cuyos parámetros se ajustan durante el entrenamiento. Las redes modernas pueden contener desde miles hasta miles de millones de parámetros.","tags":["IA","aprendizaje automático"]},
+    {"id":"transformer","title":"Transformer","aliases":["transformer","transformadores"],"text":"Un Transformer es una arquitectura de red neuronal que utiliza mecanismos de atención para relacionar elementos de una secuencia. Se usa ampliamente en modelos de lenguaje y otras tareas de aprendizaje profundo.","tags":["IA","lenguaje"]},
+    {"id":"llm","title":"Modelo de lenguaje grande","aliases":["LLM","modelo de lenguaje","modelo de lenguaje grande"],"text":"Un modelo de lenguaje grande aprende regularidades estadísticas del lenguaje a partir de grandes colecciones de texto y puede estimar continuaciones probables, generar texto y resolver diversas tareas mediante el contexto de entrada.","tags":["IA","lenguaje"]},
+    {"id":"memory","title":"Memoria","aliases":["memoria"],"text":"En un agente artificial conviene distinguir memoria episódica de experiencias, memoria semántica de conocimientos y memoria de trabajo para información temporal usada durante una tarea.","tags":["cognición","agentes"]},
+    {"id":"unity","title":"Unity","aliases":["Unity","Unity Engine"],"text":"Unity es un motor de desarrollo interactivo utilizado para crear videojuegos y otras aplicaciones 2D y 3D. Los proyectos suelen programar comportamiento mediante C# y componentes asociados a objetos de una escena.","tags":["videojuegos","C#"]},
+    {"id":"blender","title":"Blender","aliases":["Blender"],"text":"Blender es una suite libre de creación 3D que incluye modelado, escultura, rigging, animación, renderizado, composición y otras herramientas para producción gráfica.","tags":["3D","gráficos"]}
+  ]
+}
