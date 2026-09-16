@@ -25,6 +25,7 @@ global.fetch=async function(url){
 };
 
 require("../tokenizer.js");
+require("../tokenizer-refinement.js");
 
 (async()=>{
   await global.npcTokenizer.load();
@@ -42,6 +43,8 @@ require("../tokenizer.js");
   const dimelo=d.tokens.find(x=>x.folded==="dimelo");
   assert.ok(dimelo&&dimelo.clitics,"debe detectar clíticos adjuntos en dímelo");
   assert.deepStrictEqual(dimelo.clitics.clitics.map(x=>x.text),["me","lo"]);
+  assert.strictEqual(dimelo.lemma,"decir","debe recuperar el lema verbal de dímelo");
+  assert.strictEqual(dimelo.upos,"VERB");
 
   d=T.tokenize("Qué onda, parce. Todo bien.");
   assert.ok(d.mwes.some(x=>x.lemma==="qué_onda"),"debe reconocer saludo multipalabra");
@@ -54,6 +57,16 @@ require("../tokenizer.js");
   assert.ok(d.tokens.some(x=>x.kind==="DATE"),"debe reconocer fecha como un token");
   assert.ok(d.tokens.some(x=>x.kind==="TIME"),"debe reconocer hora como un token");
   assert.ok(d.tokens.some(x=>x.kind==="URL"),"debe reconocer URL");
+  assert.ok(d.tokens.some(x=>x.text==="."&&x.kind==="PUNCT"),"la URL no debe tragarse el punto final");
+
+  d=T.tokenize("Hola @andres, revisa #puerta.");
+  assert.ok(d.tokens.some(x=>x.kind==="MENTION"&&x.text==="@andres"));
+  assert.ok(d.tokens.some(x=>x.kind==="HASHTAG"&&x.text==="#puerta"));
+
+  d=T.tokenize("¿Cómo estás?");
+  const como=d.tokens.find(x=>x.folded==="como");
+  assert.strictEqual(como.upos,"ADV");
+  assert.strictEqual(como.feats.PronType,"Int");
 
   d=T.tokenize("No quiero abrir la puerta.");
   assert.strictEqual(d.frames[0].negated,true,"debe conservar negación");
