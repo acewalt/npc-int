@@ -8,7 +8,84 @@ Prueba la terminal web del NPC aquí:
 
 **https://acewalt.github.io/npc-int/**
 
-La demo permite conversar con NIA-01, inspeccionar memoria y estado interno, probar conocimiento, gramática, eventos del mundo y comportamiento autónomo directamente desde el navegador, también en móvil.
+La demo permite conversar con NIA-01, inspeccionar memoria y estado interno, probar conocimiento, gramática, eventos del mundo, pragmática y comportamiento autónomo directamente desde el navegador, también en móvil.
+
+## Ciclo mental
+
+La arquitectura actual intenta que cada decisión pase por un ciclo explícito:
+
+```text
+                    ┌───────────────┐
+                    │   PERCEPCIÓN  │
+                    │ ¿Qué ocurre?  │
+                    └──────┬────────┘
+                           ↓
+                    ┌───────────────┐
+                    │ ESTADO MENTAL │
+                    │ hambre        │
+                    │ miedo         │
+                    │ curiosidad    │
+                    │ confianza     │
+                    │ energía       │
+                    └──────┬────────┘
+                           ↓
+          ┌────────────────┼────────────────┐
+          ↓                ↓                ↓
+     MEMORIA           IDENTIDAD        OBJETIVOS
+   qué ocurrió        quién soy        qué quiero
+   quién hizo qué     qué creo         prioridades
+   relaciones         personalidad     necesidades
+          └────────────────┼────────────────┘
+                           ↓
+                    ┌───────────────┐
+                    │ RAZONAMIENTO  │
+                    │ opciones      │
+                    │ consecuencias │
+                    │ conflictos    │
+                    └──────┬────────┘
+                           ↓
+                    ┌───────────────┐
+                    │   DECISIÓN    │
+                    └──────┬────────┘
+                           ↓
+                    ┌───────────────┐
+                    │    ACCIÓN     │
+                    │ hablar        │
+                    │ caminar       │
+                    │ atacar        │
+                    │ preguntar     │
+                    │ esperar       │
+                    └──────┬────────┘
+                           │
+                           └────→ vuelve a percibir
+```
+
+`mental-cycle.js` implementa esta idea en la demo web y `MentalCycleEngine` hace lo mismo en `NpcInt.Core` para Unity.
+
+Las opciones no se eligen únicamente con `if/else`. Cada acción obtiene una utilidad según:
+
+- prioridad del objetivo activo;
+- riesgo estimado;
+- coste de energía;
+- ganancia de información;
+- relación social;
+- personalidad/cautela;
+- conflictos con identidad y valores.
+
+Por ejemplo, ante peligro el motor puede comparar `observar`, `investigar`, `alejarse`, `defenderse`, `atacar` y `esperar`, y escoger la alternativa con mayor utilidad calculada.
+
+En la terminal:
+
+```text
+/mind
+/needs
+/goals
+/options
+/need hunger 0.8
+/need energy 0.3
+```
+
+`/mind` muestra el último ciclo completo: percepción, estado, recuerdos relevantes, identidad, objetivos, opciones, consecuencias, conflictos, decisión y acción seleccionada.
 
 ## Capas actuales
 
@@ -19,32 +96,41 @@ entrada del jugador / mundo
 lenguaje y gramática ---- diccionario / modismos
           |
           v
-contexto conversacional
+pragmática y contexto conversacional
           |
           +---- memoria episódica (lo que vivió)
+          |
+          +---- hechos / relaciones / inferencias
           |
           +---- conocimiento semántico (Wikipedia y packs)
           |
           v
-estado interno + objetivos
+estado mental + necesidades + objetivos
           |
           v
-decisión
+opciones + consecuencias + conflictos
           |
           v
-respuesta / acción
+decisión por utilidad
+          |
+          v
+respuesta / acción Unity
 ```
 
 ### Archivos principales
 
 - `app.js`: cerebro web base, memoria e impulsos.
 - `conversation.js`: intención, contexto entre turnos y anti-repetición.
+- `pragmatics.js`: actos de habla, tono, reparación conversacional y relación.
+- `cognition.js`: hechos, relaciones e inferencias simbólicas pequeñas.
+- `mental-cycle.js`: necesidades, objetivos, opciones, consecuencias y decisión por utilidad.
 - `grammar.js`: análisis y generación gramatical básica en español.
 - `knowledge.js`: conocimiento pequeño, diccionario y Wikipedia online como respaldo.
 - `wiki-packs.js`: búsqueda perezosa en corpus Wikipedia alojado en el repo.
 - `local-wiki.js`: prioriza la Wikipedia local antes de la consulta online.
+- `src/NpcInt.Core/MentalCycleEngine.cs`: ciclo mental equivalente en C#.
 - `src/NpcInt.Core/`: núcleo C# sin dependencia de Unity.
-- `unity/NpcBrainBehaviour.cs`: puente mínimo para Unity.
+- `unity/NpcBrainBehaviour.cs`: puente entre el cerebro y acciones de Unity.
 
 ## Wikipedia local dividida por temas
 
@@ -150,6 +236,13 @@ La gramática no sustituye un modelo de lenguaje completo. Sirve como estructura
 /state
 /thoughts
 /memory
+/mind
+/needs
+/goals
+/options
+/pragmatics
+/facts
+/infer
 /knowledge
 /wiki
 /define ajá
@@ -164,10 +257,15 @@ La gramática no sustituye un modelo de lenguaje completo. Sirve como estructura
 
 El proyecto mantiene separados:
 
-1. **Memoria episódica**: cosas que el NPC vivió u oyó en la partida.
-2. **Conocimiento semántico**: Wikipedia, manuales, lore y otras fuentes.
-3. **Lexicón**: significado y uso contextual de palabras y modismos.
-4. **Gramática**: reglas sobre cómo se forman e interpretan oraciones.
-5. **Estado interno**: curiosidad, sociabilidad, autonomía, propósito, amenaza, etc.
+1. **Percepción**: mensajes, eventos del mundo y paso del tiempo.
+2. **Memoria episódica**: cosas que el NPC vivió u oyó en la partida.
+3. **Conocimiento semántico**: Wikipedia, manuales, lore y otras fuentes.
+4. **Lexicón**: significado y uso contextual de palabras y modismos.
+5. **Gramática**: reglas sobre cómo se forman e interpretan oraciones.
+6. **Pragmática**: qué intenta hacer el interlocutor al hablar y con qué tono.
+7. **Hechos/creencias**: relaciones estructuradas e inferencias pequeñas.
+8. **Necesidades y afecto**: hambre, energía, miedo, curiosidad y relación.
+9. **Objetivos**: prioridades derivadas del estado actual.
+10. **Decisión**: comparación de acciones según utilidad, riesgo, coste y conflictos.
 
-Esto evita que el NPC confunda “Andrés me dijo X” con “Wikipedia dice X”, o una hipótesis propia con un hecho recuperado de una fuente externa.
+Esto evita que el NPC confunda “Andrés me dijo X” con “Wikipedia dice X”, una hipótesis propia con un hecho recuperado de una fuente externa o una emoción con una necesidad física.
