@@ -42,8 +42,6 @@ class NpcBrain{
   moodLabel(){return "neutral";}
   say(x){this.dialogue.lastNpc=x;this.discourse.previousNpc=x;return x;}
   hear(text){
-    // Simula tanto las malas respuestas de las capturas como la contaminación
-    // pragmática/discursiva/cognitiva que producían las capas inferiores.
     this.dialogue.lastUser=text;
     this.pragmatics.meaningfulTopic=text;
     this.dialogue.topic=text;
@@ -60,6 +58,7 @@ class NpcBrain{
     if(/piensas de alberto/i.test(text))return this.say("Ahora mismo tengo en mente «Paso del tiempo».");
     return this.say(`fallback inferior para ${text}`);
   }
+  tick(){return "No quiero limitarme a esperar una orden. Voy a intentar decidir qué debería observar a continuación.";}
 }
 
 global.NpcBrain=NpcBrain;
@@ -78,9 +77,11 @@ assert.strictEqual(b.pragmatics.meaningfulTopic,"un golpe detrás de la puerta",
 assert.strictEqual(b.discourse.focus.length,0,"el metaturno no debe quedar como foco discursivo sustantivo");
 
 r=b.hear("Entonces que me puedes decir tú? Que quisieras hacer ?");
-assert.match(r,/preferiría|situación concreta|observar/i);
+assert.match(r,/Soy NIA-01/i,"debe responder la primera pregunta del turno compuesto");
+assert.match(r,/preferiría|situación concreta|observar/i,"debe responder también la segunda pregunta");
 assert.doesNotMatch(r,/más relacionado que recuerdo|NIA-01: Qué tal/i);
 assert.doesNotMatch(r,/Yo bien/i);
+assert.strictEqual(b.conversationArbiter.lastIntent,"compound_request");
 
 r=b.hear("Entonces que puedes hacer ahora");
 assert.match(r,/conversar|recordar|razonar|hipótesis/i);
@@ -132,8 +133,6 @@ r=b.hear("que piensas de alberto");
 assert.match(r,/realmente tengo registrado|Alberto vive en/i);
 assert.doesNotMatch(r,/Paso del tiempo/i);
 
-// Sin ningún evento previo, una pregunta social tampoco puede convertirse en
-// el foco del siguiente deseo/acción.
 const b2=new NpcBrain();
 b2.pragmatics.meaningfulTopic=null;
 b2.dialogue.topic=null;
@@ -147,5 +146,11 @@ assert.strictEqual(b2.pragmatics.meaningfulTopic,null);
 r=b2.hear("que quisieras hacer ahora");
 assert.doesNotMatch(r,/yo bien|y tu/i);
 assert.match(r,/preferiría|situación concreta|observar/i);
+
+// AUTO: no debe emitir otra frase genérica inmediatamente, ni hacerlo sin
+// un evento/idea sustantiva aunque hayan pasado varios segundos.
+assert.strictEqual(b2.tick(2),null);
+b2.conversationArbiter.lastUserWallMs=Date.now()-25000;
+assert.strictEqual(b2.tick(2),null);
 
 console.log("conversation arbiter smoke: ok");
