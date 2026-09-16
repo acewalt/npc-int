@@ -31,5 +31,11 @@ jobs:
             echo "Checking $file"
             node --check "$file"
           done
-      - name: Understanding regression smoke test
-        run: node tests/understanding-smoke.js
+      - name: Web cognition regression smoke tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          for file in ./tests/*.js; do
+            echo "Running $file"
+            node "$file"
+          done
