@@ -65,6 +65,9 @@
     else if(isQ && any("entender","comprender") && target2){intent="ask_understanding";confidence=.94;basis=["question","understand","2nd-person"];}
     else if(isQ && any("registrar") && target2){intent="ask_registered";confidence=.91;basis=["question","registrar","2nd-person"];}
     else if(isQ && (contains("tener","cuenta")||normalized.includes("en cuenta")) && target2){intent="ask_considering";confidence=.9;basis=["tener-en-cuenta","2nd-person"];}
+    else if((isQ||q.length>0) && target2 && (any("pensar") || (any("tener") && ws.includes("mente")))){
+      intent="ask_current_thought";confidence=.96;basis=["question","mental-state","2nd-person"];
+    }
     else if(isQ && any("seguir") && target2){intent="ask_following";confidence=.88;basis=["seguir","2nd-person"];}
     else if(isQ && any("añadir","agregar") && target2){intent="ask_what_add";confidence=.88;basis=["add","2nd-person"];}
     else if(isQ && any("poder","saber") && target2){intent="ask_capabilities";confidence=.91;basis=["modal-capability","2nd-person"];}
@@ -109,5 +112,5 @@
   }
 
   window.NpcIntSemanticInterpreter={interpret,inferIntent};
-  print("system","","intérprete semántico v1.1 cargado · precedencia de actos + UD + roles + entidades");
+  print("system","","intérprete semántico v1.2 cargado · actos mentales + UD + roles + entidades");
 })();
