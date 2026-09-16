@@ -40,6 +40,9 @@ const cases=[
   ["que sigues","ask_following"],
   ["añadir que","ask_what_add"],
   ["que entiendes","ask_understanding"],
+  ["Que estás pensando","ask_current_thought"],
+  ["en que piensas","ask_current_thought"],
+  ["que tienes en mente","ask_current_thought"],
   ["eres gay","ask_orientation"],
   ["te gusta?","ask_preference"],
   ["Mm","backchannel"]
