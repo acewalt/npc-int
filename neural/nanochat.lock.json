@@ -1,0 +1,7 @@
+{
+  "repository": "https://github.com/karpathy/nanochat.git",
+  "commit": "92d63d4e8bb4df75c3b71618f31ddde2378b2bcd",
+  "branch": "master",
+  "license": "MIT",
+  "note": "Pinned revision verified against nanochat scripts/chat_cli.py integration API. Update deliberately, not automatically."
+}
