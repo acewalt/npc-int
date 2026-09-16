@@ -101,18 +101,40 @@ namespace NpcInt.Core
     }
 
     [Serializable]
+    public sealed class NlpCorefMention
+    {
+        public int sentence;
+        public int startWord;
+        public int endWord;
+        public string text;
+        public bool representative;
+    }
+
+    [Serializable]
+    public sealed class NlpCorefChain
+    {
+        public int index;
+        public string representative;
+        public List<NlpCorefMention> mentions = new List<NlpCorefMention>();
+        public string source;
+    }
+
+    [Serializable]
     public sealed class NlpAnalysis
     {
         public bool ok;
         public string language;
         public string backend;
         public string model;
+        public string corefMode;
+        public string corefFallbackReason;
         public string text;
         public float elapsedMs;
         public List<string> processors = new List<string>();
         public List<NlpSentence> sentences = new List<NlpSentence>();
         public List<NlpEntity> entities = new List<NlpEntity>();
         public List<NlpCoreference> coreferences = new List<NlpCoreference>();
+        public List<NlpCorefChain> coreferenceChains = new List<NlpCorefChain>();
         public List<NlpSemanticFrame> frames = new List<NlpSemanticFrame>();
         public string error;
     }
