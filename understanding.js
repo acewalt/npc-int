@@ -28,7 +28,7 @@
   }
 
   function repairToken(w){
-    const fixed={haci:"asi",teines:"tienes",tienees:"tienes",tienee:"tienes",encuenta:"en cuenta",intelijencia:"inteligencia",informasion:"informacion",entiendes:"entiendes"};
+    const fixed={haci:"asi",teines:"tienes",tienees:"tienes",tienee:"tienes",encuenta:"en cuenta",intelijencia:"inteligencia",informasion:"informacion"};
     if(fixed[w])return fixed[w];
     if(w.length<4)return w;
     let best=w,score=99;
@@ -62,7 +62,8 @@
     const t=n.split(" ").filter(Boolean);
     let intent=null;
 
-    if((hasAny(t,"inteligencia","capacidad")&&hasAny(t,"tienes","tiene","eres")) || /que sabes hacer/.test(n)) intent="ask_capabilities";
+    if(/^(mm+|hm+|hmm+|uhm+|aja|ajá)$/.test(UNorm(text).replace(/[¿?¡!]/g,""))) intent="backchannel";
+    else if((hasAny(t,"inteligencia","capacidad")&&hasAny(t,"tienes","tiene","eres")) || /que sabes hacer/.test(n)) intent="ask_capabilities";
     else if((hasAny(t,"entiendes","entendiste","comprendes","comprendiste")&&hasAny(t,"que","esto","eso")) || /^que entend/.test(n)) intent="ask_understanding";
     else if(hasAny(t,"registraste","registro")&&hasAny(t,"que","cual")) intent="ask_registered";
     else if(hasAll(t,"tienes","cuenta")&&hasAny(t,"que","cual")) intent="ask_considering";
@@ -172,6 +173,12 @@
     b.understanding.history.push({...f,time:b.time||0,answer});
     if(b.understanding.history.length>30)b.understanding.history.shift();
     b.silence=0;
+    if(b.dialogue){
+      b.dialogue.turn=(b.dialogue.turn||0)+1;
+      b.dialogue.previousIntent=b.dialogue.lastIntent||"none";
+      b.dialogue.lastIntent=f.intent||"semantic";
+      b.dialogue.lastUser=f.raw;
+    }
     if(typeof b.remember==="function")b.remember("dialogue",`${b.relation?.name||"Jugador"}: ${f.raw}`,.48);
     if(Array.isArray(b.lastThoughts)){
       b.lastThoughts.unshift(`COMPRENSIÓN: intención=${f.intent}; canónico=«${f.canonical}»${f.repaired.length?`; reparaciones=${f.repaired.join(", ")}`:""}`);
@@ -188,6 +195,11 @@
     this.understanding.lastFrame=f;
     this.understanding.lastCanonical=f.canonical;
     this.understanding.lastRepair=f.repaired.slice();
+
+    if(f.intent==="backchannel"){
+      noteDirect(this,f,null);
+      return null;
+    }
 
     if(f.intent){
       const answer=answerFrame(this,f);
@@ -227,5 +239,5 @@
 
   ensureUnderstanding(brain);
   window.NpcIntUnderstanding={canonical,classify};
-  print("system","","comprensión v0.1 cargada · normalización · faltas tipográficas · elipsis · intención semántica");
+  print("system","","comprensión v0.2 cargada · normalización · faltas tipográficas · elipsis · intención semántica · backchannels");
 })();
