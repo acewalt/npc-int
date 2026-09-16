@@ -17,17 +17,24 @@ public sealed class NpcBrainBehaviour : MonoBehaviour
     [SerializeField] private NlpBridgeClient nlpBridge;
     [SerializeField] private bool logNlpFailures = true;
 
+    [Header("Idea Formation")]
+    [SerializeField] private bool useIdeaFormation = true;
+    [SerializeField] private bool logIdeas = true;
+
     [Header("Debug")]
     [SerializeField] private bool logSymbolicSpeech = true;
 
     private NpcBrain _brain;
     private MentalCycleEngine _mind;
+    private IdeaFormationEngine _ideas;
     private float _timer;
     private readonly SemaphoreSlim _hearGate = new SemaphoreSlim(1, 1);
 
     public NpcBrain Brain { get { return _brain; } }
     public MentalCycleEngine Mind { get { return _mind; } }
+    public IdeaFormationEngine Ideas { get { return _ideas; } }
     public MentalCycleResult LastMentalCycle { get { return _mind != null ? _mind.LastCycle : null; } }
+    public NpcIdea LastIdea { get; private set; }
     public NlpAnalysis LastNlpAnalysis { get; private set; }
     public DialogueAct LastDialogueAct { get; private set; }
 
@@ -35,11 +42,14 @@ public sealed class NpcBrainBehaviour : MonoBehaviour
     public event Action<BrainTurn, MentalCycleResult> TurnCompleted;
     // Permite inspeccionar/registrar el análisis lingüístico previo a la decisión.
     public event Action<NlpAnalysis, DialogueAct> LanguageAnalyzed;
+    // Expone la nueva síntesis causal a UI, debug, memoria externa o un planner físico.
+    public event Action<NpcIdea> IdeaFormed;
 
     private void Awake()
     {
         _brain = new NpcBrain(GetInstanceID());
         _mind = new MentalCycleEngine(_brain);
+        _ideas = new IdeaFormationEngine();
         if (nlpBridge == null) nlpBridge = GetComponent<NlpBridgeClient>();
         Debug.Log("NPC brain initialized: " + _brain.DescribeState());
     }
@@ -97,13 +107,27 @@ public sealed class NpcBrainBehaviour : MonoBehaviour
                 }
             }
 
+            string ideaIntent = ClassifyIdeaIntent(text, act);
+
             BrainTurn turn = act != null
                 ? _brain.ProcessMessageAnalyzed(text, act, "Jugador")
                 : _brain.ProcessMessage(text, "Jugador");
 
-            // El ciclo mental sigue siendo la autoridad para objetivos/acciones. El análisis
-            // lingüístico ya fue guardado por ProcessMessageAnalyzed antes de este paso.
+            // El ciclo mental sigue siendo la autoridad para objetivos/acciones.
             MentalCycleResult cycle = _mind.ThinkMessage(text);
+
+            if (useIdeaFormation && !string.IsNullOrEmpty(ideaIntent))
+            {
+                EnsureIdeaFromRecentWorld(cycle);
+                if (LastIdea != null)
+                {
+                    turn.Action.Kind = ActionKind.Speak;
+                    turn.Action.Utterance = _ideas.Verbalize(LastIdea, ideaIntent);
+                    turn.Action.Reason = "respuesta construida desde hipótesis, crítica y síntesis causal";
+                    turn.Action.Utility = 0.90f;
+                }
+            }
+
             CompleteTurn(turn, cycle);
         }
         finally
@@ -116,6 +140,7 @@ public sealed class NpcBrainBehaviour : MonoBehaviour
     {
         BrainTurn turn = _brain.ProcessWorldEvent(description, importance, threat);
         MentalCycleResult cycle = _mind.ThinkWorld(description, threat, importance);
+        if (useIdeaFormation) FormIdea(description, cycle);
         CompleteTurn(turn, cycle);
     }
 
@@ -127,6 +152,56 @@ public sealed class NpcBrainBehaviour : MonoBehaviour
     public void SetEnergy(float value)
     {
         _mind.SetNeed("energy", value);
+    }
+
+    private void FormIdea(string focus, MentalCycleResult cycle)
+    {
+        if (_ideas == null || string.IsNullOrWhiteSpace(focus)) return;
+        LastIdea = _ideas.FormIdea(focus, cycle);
+        if (logIdeas && LastIdea != null)
+        {
+            Debug.Log(name + " idea: " + LastIdea.Claim + " | crítica: " + LastIdea.Critique + " | prueba: " + LastIdea.RecommendedTest);
+        }
+        Action<NpcIdea> handler = IdeaFormed;
+        if (handler != null && LastIdea != null) handler(LastIdea);
+    }
+
+    private void EnsureIdeaFromRecentWorld(MentalCycleResult currentCycle)
+    {
+        if (LastIdea != null || _brain == null || _brain.Memory == null) return;
+        MemoryEntry recent = null;
+        for (int i = _brain.Memory.Items.Count - 1; i >= 0; i--)
+        {
+            MemoryEntry item = _brain.Memory.Items[i];
+            if (item.Kind == "world") { recent = item; break; }
+        }
+        if (recent != null) FormIdea(recent.Text, currentCycle);
+    }
+
+    private static string ClassifyIdeaIntent(string text, DialogueAct act)
+    {
+        if (act != null && act.Intent == "ask_current_thought") return "ask_current_thought";
+        string n = Fold(text);
+        if (ContainsAny(n, "que posibilidades hay", "que posibilidades ves", "que explicaciones", "que hipotesis", "cuales son tus hipotesis", "que podria ser", "que pudo causar", "que podria haberlo causado"))
+            return "ask_hypotheses";
+        if (ContainsAny(n, "que opinas", "que crees que pasa", "que crees que paso", "que idea tienes", "que se te ocurre", "cual es tu teoria", "formula una idea"))
+            return "ask_idea";
+        if (ContainsAny(n, "que estas pensando", "que piensas", "en que piensas", "que tienes en mente"))
+            return "ask_current_thought";
+        return null;
+    }
+
+    private static string Fold(string value)
+    {
+        string s = (value ?? string.Empty).ToLowerInvariant();
+        return s.Replace("á", "a").Replace("é", "e").Replace("í", "i").Replace("ó", "o").Replace("ú", "u").Replace("ü", "u");
+    }
+
+    private static bool ContainsAny(string source, params string[] values)
+    {
+        for (int i = 0; i < values.Length; i++)
+            if (source.IndexOf(values[i], StringComparison.Ordinal) >= 0) return true;
+        return false;
     }
 
     private void CompleteTurn(BrainTurn turn, MentalCycleResult cycle)
