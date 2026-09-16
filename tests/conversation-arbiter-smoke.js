@@ -15,7 +15,7 @@ class NpcBrain{
     this.identity={name:"NIA-01",purpose:"comprender el entorno, conservar continuidad y actuar según mis experiencias"};
     this.relation={name:"Jugador",trust:.55};
     this.dialogue={lastUser:"",lastNpc:"Qué tal.",topic:null};
-    this.discourse={previousNpc:"Qué tal.",lastRegistered:null,focus:[]};
+    this.discourse={previousNpc:"Qué tal.",lastRegistered:null,lastCommitment:null,focus:[]};
     this.pragmatics={meaningfulTopic:"un golpe detrás de la puerta"};
     this.mem=[{type:"world",text:"se escuchó un golpe detrás de la puerta",salience:.8}];
     this.cognition={facts:[]};
@@ -42,9 +42,13 @@ class NpcBrain{
   moodLabel(){return "neutral";}
   say(x){this.dialogue.lastNpc=x;this.discourse.previousNpc=x;return x;}
   hear(text){
-    // Simula los fallos reales de las capturas y la contaminación de foco que
-    // producían las capas inferiores antes del arbitraje final.
+    // Simula tanto las malas respuestas de las capturas como la contaminación
+    // pragmática/discursiva/cognitiva que producían las capas inferiores.
     this.dialogue.lastUser=text;
+    this.pragmatics.meaningfulTopic=text;
+    this.dialogue.topic=text;
+    this.discourse.focus.push({kind:"user",text});
+    this.discourse.lastRegistered={source:text,kind:"context"};
     this.cognitiveState.current={intent:"fallback",topic:text,goal:{id:"understand",label:"reducir incertidumbre"},action:{id:"observe",label:"observar el entorno"},unresolved:[`no tengo conocimiento suficiente sobre «${text}»`],workingMemory:[{kind:"topic",text,weight:.9}]};
     this.ideaEngine.current={focus:text,synthesis:{claim:"hipótesis contaminada"}};this.ideaEngine.history.push(this.ideaEngine.current);
     this.hypothesisEngine.current={focus:text};this.hypothesisEngine.history.push(this.hypothesisEngine.current);
@@ -60,7 +64,6 @@ class NpcBrain{
 
 global.NpcBrain=NpcBrain;
 global.brain=new NpcBrain();
-
 require("../conversation-arbiter.js");
 
 const b=new NpcBrain();
@@ -71,10 +74,13 @@ assert.match(r,/tranquilo|curiosidad|foco/i);
 assert.doesNotMatch(r,/no lo sé todavía|sin inventar$/i);
 assert.strictEqual(b.cognitiveState.current.topic,"un golpe detrás de la puerta");
 assert.strictEqual(b.ideaEngine.current,originalIdea,"una pregunta social no debe sustituir la idea causal activa");
+assert.strictEqual(b.pragmatics.meaningfulTopic,"un golpe detrás de la puerta","el metaturno no debe reemplazar meaningfulTopic");
+assert.strictEqual(b.discourse.focus.length,0,"el metaturno no debe quedar como foco discursivo sustantivo");
 
 r=b.hear("Entonces que me puedes decir tú? Que quisieras hacer ?");
 assert.match(r,/preferiría|situación concreta|observar/i);
 assert.doesNotMatch(r,/más relacionado que recuerdo|NIA-01: Qué tal/i);
+assert.doesNotMatch(r,/Yo bien/i);
 
 r=b.hear("Entonces que puedes hacer ahora");
 assert.match(r,/conversar|recordar|razonar|hipótesis/i);
@@ -125,5 +131,21 @@ b.cognition.facts.push({subject:"Alberto",predicate:"vive en",object:"una ciudad
 r=b.hear("que piensas de alberto");
 assert.match(r,/realmente tengo registrado|Alberto vive en/i);
 assert.doesNotMatch(r,/Paso del tiempo/i);
+
+// Sin ningún evento previo, una pregunta social tampoco puede convertirse en
+// el foco del siguiente deseo/acción.
+const b2=new NpcBrain();
+b2.pragmatics.meaningfulTopic=null;
+b2.dialogue.topic=null;
+b2.mem=[];
+b2.cognitiveState.current.topic=null;
+b2.ideaEngine.current=null;b2.ideaEngine.history=[];
+b2.hypothesisEngine.current=null;b2.hypothesisEngine.history=[];
+b2.conceptGraph.current=null;b2.conceptGraph.history=[];
+r=b2.hear("Yo bien, y tu ?");
+assert.strictEqual(b2.pragmatics.meaningfulTopic,null);
+r=b2.hear("que quisieras hacer ahora");
+assert.doesNotMatch(r,/yo bien|y tu/i);
+assert.match(r,/preferiría|situación concreta|observar/i);
 
 console.log("conversation arbiter smoke: ok");
