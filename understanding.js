@@ -56,26 +56,44 @@
   function hasAll(tokens,...xs){return xs.every(x=>tokens.includes(x));}
   function hasAny(tokens,...xs){return xs.some(x=>tokens.includes(x));}
 
+  function semanticFor(text,b){
+    try{
+      if(!b?.nlp?.lastAnalysis || b.nlp.lastText!==text)return null;
+      return b.nlp.lastSemantic || window.NpcIntSemanticInterpreter?.interpret?.(text,b.nlp.lastAnalysis,b) || null;
+    }catch(_){return null;}
+  }
+
   function classify(text,b){
     const c=canonical(text);
     const n=c.text;
     const t=n.split(" ").filter(Boolean);
-    let intent=null;
+    const semantic=semanticFor(text,b);
+    let intent=semantic?.intent||null;
 
-    if(/^(mm+|hm+|hmm+|uhm+|aja|ajá)$/.test(UNorm(text).replace(/[¿?¡!]/g,""))) intent="backchannel";
-    else if((hasAny(t,"inteligencia","capacidad")&&hasAny(t,"tienes","tiene","eres")) || /que sabes hacer/.test(n)) intent="ask_capabilities";
-    else if((hasAny(t,"entiendes","entendiste","comprendes","comprendiste")&&hasAny(t,"que","esto","eso")) || /^que entend/.test(n)) intent="ask_understanding";
-    else if(hasAny(t,"registraste","registro")&&hasAny(t,"que","cual")) intent="ask_registered";
-    else if(hasAll(t,"tienes","cuenta")&&hasAny(t,"que","cual")) intent="ask_considering";
-    else if(hasAny(t,"informacion")&&hasAny(t,"para")&&hasAny(t,"que")) intent="ask_information_purpose";
-    else if(hasAny(t,"sigues","siguiendo")&&hasAny(t,"que","por")) intent="ask_following";
-    else if(hasAny(t,"añadir","agregar")&&hasAny(t,"que","cual")) intent="ask_what_add";
-    else if(hasAny(t,"recuerdas")&&hasAny(t,"que","cual")) intent="ask_memory_semantic";
-    else if(hasAll(t,"eres","gay") || hasAll(t,"eres","heterosexual") || hasAll(t,"eres","bisexual")) intent="ask_orientation";
-    else if(hasAll(t,"te","gusta") || /^te gusta/.test(n)) intent="ask_preference";
-    else if((hasAny(t,"porque")||hasAll(t,"por","que"))&&hasAny(t,"respondes","dices","dijiste")) intent="ask_reason";
+    // Fallback rules remain useful when the neural NLP bridge is disabled or
+    // when its semantic projection has low coverage. They are deliberately
+    // second choice now, not the primary parser.
+    if(!intent){
+      if(/^(mm+|hm+|hmm+|uhm+|aja|ajá)$/.test(UNorm(text).replace(/[¿?¡!]/g,""))) intent="backchannel";
+      else if((hasAny(t,"inteligencia","capacidad")&&hasAny(t,"tienes","tiene","eres")) || /que sabes hacer/.test(n)) intent="ask_capabilities";
+      else if((hasAny(t,"entiendes","entendiste","comprendes","comprendiste")&&hasAny(t,"que","esto","eso")) || /^que entend/.test(n)) intent="ask_understanding";
+      else if(hasAny(t,"registraste","registro")&&hasAny(t,"que","cual")) intent="ask_registered";
+      else if(hasAll(t,"tienes","cuenta")&&hasAny(t,"que","cual")) intent="ask_considering";
+      else if(hasAny(t,"informacion")&&hasAny(t,"para")&&hasAny(t,"que")) intent="ask_information_purpose";
+      else if(hasAny(t,"sigues","siguiendo")&&hasAny(t,"que","por")) intent="ask_following";
+      else if(hasAny(t,"añadir","agregar")&&hasAny(t,"que","cual")) intent="ask_what_add";
+      else if(hasAny(t,"recuerdas")&&hasAny(t,"que","cual")) intent="ask_memory_semantic";
+      else if(hasAll(t,"eres","gay") || hasAll(t,"eres","heterosexual") || hasAll(t,"eres","bisexual")) intent="ask_orientation";
+      else if(hasAll(t,"te","gusta") || /^te gusta/.test(n)) intent="ask_preference";
+      else if((hasAny(t,"porque")||hasAll(t,"por","que"))&&hasAny(t,"respondes","dices","dijiste")) intent="ask_reason";
+    }
 
-    return {raw:text,canonical:n,tokens:t,intent,repaired:c.repaired};
+    return {
+      raw:text,canonical:n,tokens:t,intent,repaired:c.repaired,
+      semantic,
+      source:semantic?.intent?semantic.source||"semantic-nlp":"heuristic-fallback",
+      confidence:semantic?.intent?semantic.confidence:null
+    };
   }
 
   function topGoal(b){
@@ -103,13 +121,13 @@
     const d=b.discourse||{};
     switch(f.intent){
       case "ask_capabilities":
-        return "Mi inteligencia actual es híbrida, no general. Puedo mantener contexto entre turnos, memoria episódica, hechos y relaciones, consultar conocimiento, interpretar algunos actos de habla y comparar acciones por objetivos, riesgo y coste. Aun fallo con ambigüedad, elipsis y lenguaje no previsto; Nanochat puede mejorar la comprensión y la redacción cuando está conectado.";
+        return "Mi inteligencia actual es híbrida. Mantengo contexto, memoria episódica, hechos y relaciones, conocimiento externo, estado mental, objetivos y decisiones. Cuando el NLP local está activo también puedo usar análisis contextual de lemas, morfología, dependencias y entidades; Nanochat puede encargarse de interpretación adicional y redacción neuronal.";
 
       case "ask_understanding": {
         const x=d.lastInterpretation;
         if(x&&x.source&&UNorm(x.source)!==UNorm(f.raw))return `De «${x.source}» entendí: ${x.interpretation}.`;
         const prev=previousRelevantUser(b);
-        return prev?`Del turno anterior «${prev}» intento conservar su intención y relación con lo que veníamos hablando. Si quieres, puedo mostrarte la lectura exacta con /understanding.`:"No tengo una interpretación anterior suficientemente clara para señalarla sin inventar.";
+        return prev?`Del turno anterior «${prev}» intento conservar su intención y relación con lo que veníamos hablando. Puedes inspeccionar mi lectura con /understanding y, si está activo, /nlp last.`:"No tengo una interpretación anterior suficientemente clara para señalarla sin inventar.";
       }
 
       case "ask_registered": {
@@ -181,7 +199,8 @@
     }
     if(typeof b.remember==="function")b.remember("dialogue",`${b.relation?.name||"Jugador"}: ${f.raw}`,.48);
     if(Array.isArray(b.lastThoughts)){
-      b.lastThoughts.unshift(`COMPRENSIÓN: intención=${f.intent}; canónico=«${f.canonical}»${f.repaired.length?`; reparaciones=${f.repaired.join(", ")}`:""}`);
+      const extra=f.semantic?`; NLP=${f.semantic.backend}; conf=${Math.round((f.semantic.confidence||0)*100)}%`:"";
+      b.lastThoughts.unshift(`COMPRENSIÓN: intención=${f.intent}; fuente=${f.source}; canónico=«${f.canonical}»${extra}${f.repaired.length?`; reparaciones=${f.repaired.join(", ")}`:""}`);
     }
   }
 
@@ -213,7 +232,10 @@
     const finish=answer=>{
       this.understanding.history.push({...f,time:this.time||0,answer:answer||null});
       if(this.understanding.history.length>30)this.understanding.history.shift();
-      if(Array.isArray(this.lastThoughts))this.lastThoughts.splice(1,0,`COMPRENSIÓN: canónico=«${f.canonical}»${f.repaired.length?`; reparaciones=${f.repaired.join(", ")}`:""}`);
+      if(Array.isArray(this.lastThoughts)){
+        const nlp=f.semantic?`; NLP=${f.semantic.backend}; pred=${f.semantic.predicate?.lemma||"—"}`:"";
+        this.lastThoughts.splice(1,0,`COMPRENSIÓN: fuente=${f.source}; canónico=«${f.canonical}»${nlp}${f.repaired.length?`; reparaciones=${f.repaired.join(", ")}`:""}`);
+      }
       return answer;
     };
     if(result&&typeof result.then==="function")return result.then(finish);
@@ -228,16 +250,26 @@
     ensureUnderstanding(brain);
     const f=brain.understanding.lastFrame;
     if(!f){print("debug","UNDERSTANDING>","Todavía no hay un análisis.");return;}
-    print("debug","UNDERSTANDING>",[
+    const lines=[
       `original: ${f.raw}`,
       `canónico: ${f.canonical}`,
       `intención: ${f.intent||"no resuelta"}`,
+      `fuente: ${f.source||"—"}`,
+      `confianza: ${f.confidence==null?"—":Math.round(f.confidence*100)+"%"}`,
       `reparaciones: ${f.repaired.length?f.repaired.join(", "):"—"}`,
-      `tokens: ${f.tokens.join(" | ")}`
-    ].join("\n"));
+      `tokens fallback: ${f.tokens.join(" | ")}`
+    ];
+    if(f.semantic){
+      lines.push(`predicado: ${f.semantic.predicate?.lemma||"—"}`);
+      lines.push(`polaridad: ${f.semantic.polarity||"—"}`);
+      lines.push(`roles: ${(f.semantic.roles||[]).map(r=>`${r.role}:${r.text}`).join(" | ")||"—"}`);
+      lines.push(`entidades: ${(f.semantic.entities||[]).map(e=>`${e.text}:${e.type}`).join(" | ")||"—"}`);
+      lines.push(`coreferencias: ${(f.semantic.coreferences||[]).map(c=>`${c.mention}→${c.antecedent}`).join(" | ")||"—"}`);
+    }
+    print("debug","UNDERSTANDING>",lines.join("\n"));
   };
 
   ensureUnderstanding(brain);
   window.NpcIntUnderstanding={canonical,classify};
-  print("system","","comprensión v0.2 cargada · normalización · faltas tipográficas · elipsis · intención semántica · backchannels");
+  print("system","","comprensión v1.0 cargada · NLP semántico primero · reglas tipográficas/heurísticas como fallback");
 })();
