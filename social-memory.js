@@ -31,8 +31,8 @@
     const push=(kind,value,importance=.6,tags=[])=>{if(value&&value.trim().length>1&&!sensitive.test(value))out.push({kind,value:value.trim(),importance,tags});};
     let m;
     if((m=raw.match(/(?:me llamo|mi nombre es)\s+([A-Za-zÁÉÍÓÚÜÑáéíóúüñ][\wÁÉÍÓÚÜÑáéíóúüñ-]{1,40})/i)))push("name",m[1],.95,["identity"]);
-    if((m=raw.match(/\bme gusta(?:n)?\s+(.{2,120})/i)))push("like",m[1],.66,["preference"]);
     if((m=raw.match(/\bno me gusta(?:n)?\s+(.{2,120})/i)))push("dislike",m[1],.66,["preference"]);
+    else if((m=raw.match(/\bme gusta(?:n)?\s+(.{2,120})/i)))push("like",m[1],.66,["preference"]);
     if((m=raw.match(/\bprefiero\s+(.{2,120})/i)))push("preference",m[1],.70,["preference"]);
     if((m=raw.match(/\bestoy (?:haciendo|creando|trabajando en|desarrollando|armando)\s+(.{2,140})/i)))push("project",m[1],.82,["project","active"]);
     if((m=raw.match(/\bquiero (?:hacer|crear|aprender|probar|terminar)\s+(.{2,140})/i)))push("goal",m[1],.78,["goal"]);
@@ -57,7 +57,7 @@
     const s=ensure(b),now=Date.now();
     return s.items.map(item=>{
       const sim=similarity(query,item),recency=Math.exp(-Math.max(0,now-(item.lastMentionedWallMs||now))/(1000*60*60*24*14));
-      const kindBoost=opts.kinds?.includes(item.kind)?.18:0;
+      const kindBoost=Array.isArray(opts.kinds)&&opts.kinds.includes(item.kind) ? .18 : 0;
       return {item,score:sim*.62+item.importance*.22+Math.min(.1,item.mentions*.018)+recency*.06+kindBoost};
     }).filter(x=>x.score>(opts.minScore??.18)).sort((a,c)=>c.score-a.score).slice(0,count).map(x=>x.item);
   }
