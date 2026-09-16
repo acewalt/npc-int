@@ -1,13 +1,21 @@
 using System;
+using System.Threading;
+using System.Threading.Tasks;
 using NpcInt.Core;
 using UnityEngine;
 
-// Ejemplo de puente. Copia NpcInt.Core dentro de Assets/NpcInt/Core y este archivo a Assets/NpcInt/Unity.
+// Puente principal entre NpcInt.Core y Unity.
+// Añade NlpBridgeClient al mismo GameObject para análisis lingüístico neuronal local.
 public sealed class NpcBrainBehaviour : MonoBehaviour
 {
     [Header("Simulation")]
     [SerializeField] private float secondsPerBrainTick = 5f;
     [SerializeField] private float simulatedMinutesPerTick = 1f;
+
+    [Header("Language Understanding")]
+    [SerializeField] private bool useNlpBridge = true;
+    [SerializeField] private NlpBridgeClient nlpBridge;
+    [SerializeField] private bool logNlpFailures = true;
 
     [Header("Debug")]
     [SerializeField] private bool logSymbolicSpeech = true;
@@ -15,18 +23,24 @@ public sealed class NpcBrainBehaviour : MonoBehaviour
     private NpcBrain _brain;
     private MentalCycleEngine _mind;
     private float _timer;
+    private readonly SemaphoreSlim _hearGate = new SemaphoreSlim(1, 1);
 
     public NpcBrain Brain { get { return _brain; } }
     public MentalCycleEngine Mind { get { return _mind; } }
     public MentalCycleResult LastMentalCycle { get { return _mind != null ? _mind.LastCycle : null; } }
+    public NlpAnalysis LastNlpAnalysis { get; private set; }
+    public DialogueAct LastDialogueAct { get; private set; }
 
-    // Permite conectar una capa neuronal sin acoplarla al cerebro simbólico.
+    // Permite conectar la capa neuronal de generación sin acoplarla al cerebro simbólico.
     public event Action<BrainTurn, MentalCycleResult> TurnCompleted;
+    // Permite inspeccionar/registrar el análisis lingüístico previo a la decisión.
+    public event Action<NlpAnalysis, DialogueAct> LanguageAnalyzed;
 
     private void Awake()
     {
         _brain = new NpcBrain(GetInstanceID());
         _mind = new MentalCycleEngine(_brain);
+        if (nlpBridge == null) nlpBridge = GetComponent<NlpBridgeClient>();
         Debug.Log("NPC brain initialized: " + _brain.DescribeState());
     }
 
@@ -41,11 +55,61 @@ public sealed class NpcBrainBehaviour : MonoBehaviour
         CompleteTurn(turn, cycle);
     }
 
+    // Mantiene una firma void compatible con Button, InputField y UnityEvent.
     public void HearPlayer(string text)
     {
-        BrainTurn turn = _brain.ProcessMessage(text, "Jugador");
-        MentalCycleResult cycle = _mind.ThinkMessage(text);
-        CompleteTurn(turn, cycle);
+        _ = HearPlayerAsync(text);
+    }
+
+    public async Task HearPlayerAsync(string text)
+    {
+        text = (text ?? string.Empty).Trim();
+        if (text.Length == 0) return;
+
+        await _hearGate.WaitAsync();
+        try
+        {
+            DialogueAct act = null;
+            NlpAnalysis analysis = null;
+
+            if (useNlpBridge && nlpBridge != null)
+            {
+                try
+                {
+                    analysis = await nlpBridge.AnalyzeAsync(text, CancellationToken.None);
+                    if (analysis != null && analysis.ok)
+                    {
+                        act = NlpDialogueInterpreter.Interpret(analysis);
+                        LastNlpAnalysis = analysis;
+                        LastDialogueAct = act;
+
+                        Action<NlpAnalysis, DialogueAct> languageHandler = LanguageAnalyzed;
+                        if (languageHandler != null) languageHandler(analysis, act);
+                    }
+                    else if (logNlpFailures && analysis != null && !string.IsNullOrWhiteSpace(analysis.error))
+                    {
+                        Debug.LogWarning(name + " NLP fallback: " + analysis.error);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    if (logNlpFailures) Debug.LogWarning(name + " NLP bridge unavailable; using symbolic fallback. " + ex.Message);
+                }
+            }
+
+            BrainTurn turn = act != null
+                ? _brain.ProcessMessageAnalyzed(text, act, "Jugador")
+                : _brain.ProcessMessage(text, "Jugador");
+
+            // El ciclo mental sigue siendo la autoridad para objetivos/acciones. El análisis
+            // lingüístico ya fue guardado por ProcessMessageAnalyzed antes de este paso.
+            MentalCycleResult cycle = _mind.ThinkMessage(text);
+            CompleteTurn(turn, cycle);
+        }
+        finally
+        {
+            _hearGate.Release();
+        }
     }
 
     public void PerceiveWorldEvent(string description, float importance = 0.6f, float threat = 0f)
@@ -95,8 +159,7 @@ public sealed class NpcBrainBehaviour : MonoBehaviour
         MentalActionOption d = cycle.Decision;
         Debug.Log(name + " mental decision: " + d.Label + " utility=" + d.Utility.ToString("0.00") + " risk=" + d.Risk.ToString("0.00"));
 
-        // Estos casos son puntos de integración, no implementaciones físicas todavía.
-        // Aquí puedes conectar NavMeshAgent, Animator, combate, inventario, TTS, etc.
+        // Puntos de integración física: NavMeshAgent, Animator, combate, inventario, TTS, etc.
         switch (d.Kind)
         {
             case MentalActionKind.MoveAway:
