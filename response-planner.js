@@ -5,7 +5,7 @@
 
   function ensurePlanner(b){
     if(b.responsePlanner)return b.responsePlanner;
-    b.responsePlanner={lastPlan:null,history:[],seq:1};
+    b.responsePlanner={lastPlan:null,history:[],seq:1,lastUserWallMs:0};
     return b.responsePlanner;
   }
 
@@ -13,9 +13,19 @@
     const n=RNorm(text);
     if(/^(hola|buenas|hey|ey|que onda|que tal)$/.test(n))return "greeting";
     if(/^(no se|no lo se|ni idea|no tengo idea)$/.test(n))return "uncertainty";
+    if(/^(entonces|y entonces|bueno entonces|pues entonces|y bueno|bueno pues)$/.test(n))return "continue_thread";
+    if(/^(?:entonces |bueno |pues |a ver )?(?:habla|responde|explica|explicate|contesta)(?:me)? (?:bien|claro|mejor|mas claro|de forma clara|directo|mas directo)(?: por favor)?$/.test(n))return "request_clearer_speech";
+    if(/^(?:pero |entonces |bueno |pues )?(?:por que|porque) (?:dices|respondes|repites|estas diciendo).*(?:lo mismo|siempre|otra vez|repet)/.test(n) || /^(?:por que|porque) repites/.test(n))return "complaint_repetition";
     if(/^(que haces|que estas haciendo|en que andas|que haces ahora)$/.test(n))return "ask_activity";
     if(/^(que estas pensando|que piensas|en que piensas|en que estas pensando|que tienes en mente|que pasa por tu mente|que estas pensando ahora|en que andas pensando)$/.test(n))return "ask_current_thought";
+    if(/\bque (?:quieres|preferirias) hacer\b/.test(n) || /\bque te gustaria hacer\b/.test(n))return "ask_desired_action";
+    if(/\bque (?:vas a hacer|haras|piensas hacer)\b/.test(n) || /\bcual es tu siguiente accion\b/.test(n))return "ask_future_action";
     if(/^(como estas|como te sientes|que tal estas)$/.test(n))return "ask_state";
+
+    const words=n.split(" ").filter(Boolean);
+    const looksQuestion=/^(que|quien|como|cuando|donde|cual|cuanto|por que|porque)\b/.test(n);
+    const incompleteTail=/\b(con|para|de|del|a|por|porque|que|y|pero|si|cuando|aunque|sin|sobre)$/.test(n);
+    if(n && words.length<=3 && !looksQuestion && !incompleteTail)return "short_statement";
     return null;
   }
 
@@ -29,11 +39,13 @@
     try{d=window.NpcIntDialogueManager?.classify?.(text)||null;}catch(_){ }
     const u=b.understanding?.lastFrame;
     const semantic=currentSemantic(b,text);
-    const intent=semantic?.intent || u?.intent || d?.intent || localIntent(text) || null;
+    const local=localIntent(text);
+    const strongLocal=["continue_thread","request_clearer_speech","complaint_repetition"].includes(local)?local:null;
+    const intent=strongLocal || semantic?.intent || u?.intent || d?.intent || local || null;
     return {
       intent,
       canonical:u?.canonical || d?.canonical || RNorm(text),
-      source:semantic?.intent?"semantic-nlp":u?.source||"dialogue-fallback",
+      source:strongLocal?"pragmatic-local":semantic?.intent?"semantic-nlp":u?.source||d?.intent?"dialogue-fallback":local?"local-structure":"dialogue-fallback",
       repetition:intent&&b.dialogueManager?.lastIntent===intent ? Math.max(1,b.dialogueManager?.sameIntentCount||1) : 1
     };
   }
@@ -52,7 +64,7 @@
     const t=(state?.topic||"").trim();
     if(!t)return null;
     const n=RNorm(t),q=RNorm(input);
-    const meta=/^(que quieres hacer|que vas a hacer|que haces|que estas haciendo|como estas|que pasa|y ahora|ahora que|por donde empezamos|que te gustaria hacer|pero que quieres hacer|que estas pensando|que piensas|en que piensas|en que estas pensando|que tienes en mente|que pasa por tu mente|que estas pensando ahora|en que andas pensando)$/;
+    const meta=/^(que quieres hacer(?: .*)?|que vas a hacer(?: .*)?|que haces|que estas haciendo|como estas|que pasa|y ahora|ahora que|por donde empezamos|que te gustaria hacer(?: .*)?|pero que quieres hacer(?: .*)?|que estas pensando|que piensas|en que piensas|en que estas pensando|que tienes en mente|que pasa por tu mente|que estas pensando ahora|en que andas pensando|entonces|y entonces|bueno entonces|pues entonces|entonces habla bien|habla bien|responde bien|habla claro)$/;
     if(n===q||meta.test(n))return null;
     if(/^(hola|buenas|hey|ey|vale|ok|okay|mm+|aja)$/.test(n))return null;
     if(/^jugador( dijo| hizo|:)/.test(n))return null;
@@ -84,7 +96,7 @@
       if(!s)continue;
       const sinput=RNorm(s.input||"");
       if(!sinput||sinput===current)continue;
-      if(["ask_current_thought","greeting","ack","backchannel"].includes(s.intent))continue;
+      if(["ask_current_thought","greeting","ack","backchannel","continue_thread","request_clearer_speech","complaint_repetition"].includes(s.intent))continue;
       const topic=validWorldTopic(s,input);
       if(topic||s.action||s.goal)return s;
     }
@@ -97,7 +109,7 @@
     const topic=validWorldTopic(state,text);
     const action=naturalAction(state?.action);
     const goal=state?.goal?.label||null;
-    const prior=frame.intent==="ask_current_thought"?priorCognitiveState(b,text):null;
+    const prior=["ask_current_thought","continue_thread","request_clearer_speech","complaint_repetition","ask_reason"].includes(frame.intent)?priorCognitiveState(b,text):null;
     const thoughtTopic=validWorldTopic(prior,text)||topic;
     const thoughtAction=naturalAction(prior?.action)||action;
     const thoughtGoal=prior?.goal?.label||goal;
@@ -147,6 +159,26 @@
       case "ask_next_step":
         plan.act="state_next_step";
         plan.detail="direct";
+        break;
+      case "continue_thread":
+        plan.act="continue_discourse";
+        plan.detail="short";
+        break;
+      case "request_clearer_speech":
+        plan.act="acknowledge_repair_request";
+        plan.detail="direct";
+        break;
+      case "complaint_repetition":
+        plan.act="explain_repetition";
+        plan.detail="direct";
+        break;
+      case "ask_reason":
+        plan.act="explain_previous_response";
+        plan.detail="short";
+        break;
+      case "short_statement":
+        plan.act="accept_short_context";
+        plan.detail="short";
         break;
       case "uncertainty":
         plan.act="acknowledge_uncertainty";
@@ -222,6 +254,24 @@
         return "Lo siguiente será observar el entorno y esperar una señal concreta. Si aparece algo relevante, lo convertiré en opciones y elegiré una acción.";
       }
 
+      case "continue_discourse": {
+        if(thoughtTopic)return `Sí, sigo el hilo. Mantengo «${short(thoughtTopic,72)}» como el punto activo de la conversación.`;
+        if(thoughtGoal)return `Sí, sigo. Mi foco sigue siendo ${thoughtGoal}; todavía no apareció información suficiente para cambiarlo.`;
+        return "Sí, sigo el hilo. Continúa; usaré lo anterior como contexto en vez de tratar «entonces» como una frase incompleta.";
+      }
+
+      case "acknowledge_repair_request":
+        return "Entendido. Voy a responder más directo y a usar el contexto antes de pedirte que completes una frase. Los porcentajes y detalles internos los dejaré para /mind, /cognitive y /plan.";
+
+      case "explain_repetition":
+        return "Porque estaba enviando frases distintas al mismo fallback de aclaración. Eso hacía que repitiera la misma respuesta aunque el contexto cambiara. Debo distinguir continuidad, afirmaciones cortas y preguntas reales antes de pedir más contexto.";
+
+      case "explain_previous_response":
+        return "La respuesta anterior salió de cómo interpreté tu turno y del contexto que tenía activo. Si esa interpretación no encaja, prefiero reformularla en vez de defenderla con números internos.";
+
+      case "accept_short_context":
+        return `Entendido. Tomo «${short(p.input,72)}» como parte del contexto sin inventar una relación que no hayas dicho.`;
+
       case "acknowledge_uncertainty":
         return "Está bien. Entonces por ahora no lo sabemos; lo dejaré como una duda en vez de inventar una respuesta.";
 
@@ -282,10 +332,12 @@
   NpcBrain.prototype.reset=function(){oldReset.call(this);this.responsePlanner=null;ensurePlanner(this);};
 
   // Árbitro final del lenguaje simbólico. La intención semántica NLP tiene
-  // precedencia; las capas de regex quedan como respaldo.
+  // precedencia; los actos pragmáticos locales evitan degradar continuidad,
+  // correcciones del usuario y afirmaciones breves a un fallback genérico.
   const oldHear=NpcBrain.prototype.hear;
   NpcBrain.prototype.hear=function(text){
-    ensurePlanner(this);
+    const planner=ensurePlanner(this);
+    planner.lastUserWallMs=Date.now();
     const actualSay=this.say;
     this.say=function(x){return x;};
     let lower;
@@ -304,6 +356,24 @@
     return finish(lower);
   };
 
+  // El modo AUTO no debe parecer una segunda respuesta al mismo turno.
+  // Durante unos segundos tras hablar el jugador, se silencian pensamientos
+  // autónomos no urgentes. Las alertas de riesgo siguen pudiendo aparecer.
+  const oldTick=NpcBrain.prototype.tick;
+  NpcBrain.prototype.tick=function(minutes=1){
+    const planner=ensurePlanner(this);
+    const result=oldTick.call(this,minutes);
+    const finish=out=>{
+      if(!out)return null;
+      const wallSince=Date.now()-(planner.lastUserWallMs||0);
+      const n=RNorm(out);
+      const urgent=/peligro|alerta|amenaza|riesgo|auxilio|ataque/.test(n);
+      if(wallSince<12000&&!urgent)return null;
+      return out;
+    };
+    return result&&typeof result.then==="function"?result.then(finish):finish(result);
+  };
+
   const oldCommand=command;
   command=function(raw){
     const head=(raw.trim().split(/\s+/)[0]||"").toLowerCase();
@@ -313,5 +383,5 @@
 
   ensurePlanner(brain);
   window.NpcIntResponsePlanner={buildPlan,verbalize,formatPlan};
-  print("system","","planificador de respuesta v0.3 cargado · introspección cognitiva + NLP semántico → lenguaje");
+  print("system","","planificador de respuesta v0.4 cargado · pragmática contextual + reparación + introspección · salida natural");
 })();
