@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="dark" />
+  <title>npc-int // terminal</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main class="terminal-shell" aria-label="Terminal NPC-INT">
+    <header class="terminal-topbar">
+      <div class="brand">
+        <span class="brand-mark">NPC-INT</span>
+        <span class="path">~/nia-01</span>
+      </div>
+      <div class="status" title="Estado del agente">
+        <span class="dot"></span>
+        <span id="statusText">ONLINE · AUTO</span>
+      </div>
+    </header>
+
+    <section id="terminal" class="terminal" aria-live="polite" aria-label="Conversación"></section>
+
+    <footer class="terminal-footer">
+      <form id="chatForm" class="prompt-row" autocomplete="off">
+        <span class="prompt-user">player@npc-int</span><span class="prompt-symbol">:$</span>
+        <input id="input" type="text" spellcheck="false" autocomplete="off" autofocus
+               placeholder="habla con el NPC o escribe /help" aria-label="Mensaje para el NPC" />
+        <button type="submit" aria-label="Enviar">↵</button>
+      </form>
+      <div class="hint">/help · /state · /memory · /thoughts · /event · /tick · /auto</div>
+    </footer>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
