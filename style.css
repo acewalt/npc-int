@@ -11,7 +11,7 @@
   --red:#ff7d86;
 }
 *{box-sizing:border-box}
-html,body{height:100%}
+html,body{width:100%;height:100%;min-height:100%;overscroll-behavior:none}
 body{
   margin:0;
   background:
@@ -20,40 +20,52 @@ body{
   color:var(--text);
   font-family:"Cascadia Code","JetBrains Mono","SFMono-Regular",Consolas,"Liberation Mono",monospace;
   overflow:hidden;
+  -webkit-text-size-adjust:100%;
+  text-size-adjust:100%;
 }
 button,input{font:inherit}
+button{-webkit-tap-highlight-color:transparent;touch-action:manipulation}
 .terminal-shell{
   width:min(1180px,100vw);
   height:100vh;
+  height:100dvh;
+  min-height:0;
   margin:0 auto;
   display:grid;
-  grid-template-rows:48px 1fr auto;
+  grid-template-rows:48px minmax(0,1fr) auto;
   background:rgba(4,8,6,.96);
   border-left:1px solid #10241a;
   border-right:1px solid #10241a;
+  overflow:hidden;
 }
 .terminal-topbar{
   display:flex;
   align-items:center;
   justify-content:space-between;
+  min-width:0;
   padding:0 16px;
   border-bottom:1px solid var(--line);
   background:#07100b;
   font-size:12px;
 }
-.brand{display:flex;align-items:center;gap:10px}
-.brand-mark{color:var(--green);font-weight:800;letter-spacing:.12em}
-.path{color:var(--muted)}
-.status{display:flex;align-items:center;gap:8px;color:#91b09c;font-size:11px}
-.dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 12px rgba(112,255,159,.8)}
+.brand{display:flex;align-items:center;gap:10px;min-width:0}
+.brand-mark{color:var(--green);font-weight:800;letter-spacing:.12em;white-space:nowrap}
+.path{color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.status{display:flex;align-items:center;gap:8px;color:#91b09c;font-size:11px;white-space:nowrap}
+.dot{width:7px;height:7px;flex:0 0 7px;border-radius:50%;background:var(--green);box-shadow:0 0 12px rgba(112,255,159,.8)}
 .terminal{
-  overflow:auto;
+  min-width:0;
+  min-height:0;
+  overflow-x:hidden;
+  overflow-y:auto;
   padding:20px 18px 28px;
   scroll-behavior:smooth;
   scrollbar-color:#244c34 transparent;
+  overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch;
 }
-.line{margin:0 0 11px;white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px;line-height:1.62}
-.line .prefix{display:inline-block;min-width:94px;color:var(--muted)}
+.line{margin:0 0 11px;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;font-size:13px;line-height:1.62}
+.line .prefix{display:inline-block;min-width:94px;color:var(--muted);vertical-align:top}
 .line.user .prefix{color:var(--blue)}
 .line.npc .prefix{color:var(--green)}
 .line.world .prefix{color:var(--amber)}
@@ -61,32 +73,113 @@ button,input{font:inherit}
 .line.debug{color:#91ac9b;font-size:12px}
 .line.error{color:var(--red)}
 .line .caret{color:var(--green)}
-.terminal-footer{border-top:1px solid var(--line);background:#06100a}
-.prompt-row{display:flex;align-items:center;gap:7px;padding:12px 14px}
-.prompt-user{color:var(--blue);font-size:12px}
-.prompt-symbol{color:var(--green);font-size:12px}
+.terminal-footer{
+  min-width:0;
+  border-top:1px solid var(--line);
+  background:#06100a;
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+.prompt-row{
+  display:flex;
+  align-items:center;
+  gap:7px;
+  min-width:0;
+  padding:12px 14px;
+}
+.prompt-user{color:var(--blue);font-size:12px;white-space:nowrap}
+.prompt-symbol{color:var(--green);font-size:12px;white-space:nowrap}
 .prompt-row input{
   flex:1;
   min-width:0;
+  height:36px;
   border:0;
   outline:0;
   background:transparent;
   color:#effff4;
   caret-color:var(--green);
   font-size:13px;
+  border-radius:0;
 }
 .prompt-row input::placeholder{color:#496154}
 .prompt-row button{
-  width:34px;height:30px;border:1px solid #235435;border-radius:5px;
-  background:#0b1f12;color:var(--green);cursor:pointer
+  flex:0 0 auto;
+  width:38px;
+  height:34px;
+  border:1px solid #235435;
+  border-radius:6px;
+  background:#0b1f12;
+  color:var(--green);
+  cursor:pointer;
 }
 .prompt-row button:hover{background:#10311a}
-.hint{padding:0 14px 10px;color:#486353;font-size:10px;letter-spacing:.02em}
+.hint{padding:0 14px 10px;color:#486353;font-size:10px;letter-spacing:.02em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
 @media(max-width:700px){
-  .terminal-shell{border:0}
-  .terminal{padding:16px 12px 22px}
-  .line{font-size:12px}
+  body{background:#030504}
+  .terminal-shell{
+    width:100%;
+    border:0;
+    grid-template-rows:44px minmax(0,1fr) auto;
+  }
+  .terminal-topbar{
+    padding-left:max(12px,env(safe-area-inset-left));
+    padding-right:max(12px,env(safe-area-inset-right));
+    padding-top:env(safe-area-inset-top,0px);
+  }
+  .brand{gap:7px}
+  .brand-mark{font-size:11px}
+  .path{font-size:10px}
+  .status{gap:6px;font-size:9px}
+  .dot{width:6px;height:6px;flex-basis:6px}
+  .terminal{
+    padding:14px max(12px,env(safe-area-inset-right)) 18px max(12px,env(safe-area-inset-left));
+  }
+  .line{
+    margin-bottom:12px;
+    font-size:12.5px;
+    line-height:1.58;
+  }
+  .line.system,.line.debug{font-size:11.5px}
   .line .prefix{min-width:76px}
+  .prompt-row{
+    gap:6px;
+    padding:8px max(10px,env(safe-area-inset-right)) 8px max(10px,env(safe-area-inset-left));
+  }
   .prompt-user{display:none}
-  .hint{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .prompt-symbol{font-size:15px}
+  .prompt-row input{
+    height:44px;
+    font-size:16px;
+    line-height:44px;
+  }
+  .prompt-row button{
+    width:44px;
+    height:44px;
+    font-size:17px;
+    border-radius:8px;
+  }
+  .hint{
+    padding:0 max(10px,env(safe-area-inset-right)) 7px max(10px,env(safe-area-inset-left));
+    font-size:9px;
+  }
+}
+
+@media(max-width:430px){
+  .terminal-topbar{padding-left:max(10px,env(safe-area-inset-left));padding-right:max(10px,env(safe-area-inset-right))}
+  .path{display:none}
+  .terminal{padding-top:12px;padding-left:max(10px,env(safe-area-inset-left));padding-right:max(10px,env(safe-area-inset-right))}
+  .line{font-size:12px;line-height:1.55}
+  .line .prefix{display:block;min-width:0;margin-bottom:2px;font-size:10.5px;line-height:1.3}
+  .line.system .prefix,.line.debug .prefix{display:inline;margin:0}
+  .hint{display:none}
+}
+
+@media(max-height:520px) and (orientation:landscape){
+  .terminal-shell{grid-template-rows:36px minmax(0,1fr) auto}
+  .terminal-topbar{padding-top:0}
+  .terminal{padding-top:8px;padding-bottom:8px}
+  .line{margin-bottom:7px;font-size:11px;line-height:1.42}
+  .prompt-row{padding-top:5px;padding-bottom:5px}
+  .prompt-row input,.prompt-row button{height:38px}
+  .hint{display:none}
 }
