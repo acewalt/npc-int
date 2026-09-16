@@ -14,6 +14,7 @@
     if(/^(hola|buenas|hey|ey|que onda|que tal)$/.test(n))return "greeting";
     if(/^(no se|no lo se|ni idea|no tengo idea)$/.test(n))return "uncertainty";
     if(/^(que haces|que estas haciendo|en que andas|que haces ahora)$/.test(n))return "ask_activity";
+    if(/^(que estas pensando|que piensas|en que piensas|en que estas pensando|que tienes en mente|que pasa por tu mente|que estas pensando ahora|en que andas pensando)$/.test(n))return "ask_current_thought";
     if(/^(como estas|como te sientes|que tal estas)$/.test(n))return "ask_state";
     return null;
   }
@@ -51,8 +52,9 @@
     const t=(state?.topic||"").trim();
     if(!t)return null;
     const n=RNorm(t),q=RNorm(input);
-    const meta=/^(que quieres hacer|que vas a hacer|que haces|que estas haciendo|como estas|que pasa|y ahora|ahora que|por donde empezamos|que te gustaria hacer|pero que quieres hacer)$/;
+    const meta=/^(que quieres hacer|que vas a hacer|que haces|que estas haciendo|como estas|que pasa|y ahora|ahora que|por donde empezamos|que te gustaria hacer|pero que quieres hacer|que estas pensando|que piensas|en que piensas|en que estas pensando|que tienes en mente|que pasa por tu mente|que estas pensando ahora|en que andas pensando)$/;
     if(n===q||meta.test(n))return null;
+    if(/^(hola|buenas|hey|ey|vale|ok|okay|mm+|aja)$/.test(n))return null;
     if(/^jugador( dijo| hizo|:)/.test(n))return null;
     return t;
   }
@@ -74,12 +76,32 @@
     return map[action.id]||action.label||null;
   }
 
+  function priorCognitiveState(b,input){
+    const current=RNorm(input);
+    const history=b.cognitiveState?.history||[];
+    for(let i=history.length-1;i>=0;i--){
+      const s=history[i];
+      if(!s)continue;
+      const sinput=RNorm(s.input||"");
+      if(!sinput||sinput===current)continue;
+      if(["ask_current_thought","greeting","ack","backchannel"].includes(s.intent))continue;
+      const topic=validWorldTopic(s,input);
+      if(topic||s.action||s.goal)return s;
+    }
+    return null;
+  }
+
   function buildPlan(b,text,lowerReply){
     const frame=frameFor(b,text);
     const state=stateFor(b,text);
     const topic=validWorldTopic(state,text);
     const action=naturalAction(state?.action);
     const goal=state?.goal?.label||null;
+    const prior=frame.intent==="ask_current_thought"?priorCognitiveState(b,text):null;
+    const thoughtTopic=validWorldTopic(prior,text)||topic;
+    const thoughtAction=naturalAction(prior?.action)||action;
+    const thoughtGoal=prior?.goal?.label||goal;
+    const thoughtUnknown=prior?.unresolved?.[0]||state?.unresolved?.[0]||null;
     const repetition=Math.max(frame.repetition||1,b.dialogueManager?.sameIntentCount||1);
     const plan={
       id:ensurePlanner(b).seq++,
@@ -88,7 +110,7 @@
       intent:frame.intent,
       intentSource:frame.source,
       act:"passthrough",
-      content:{topic,action,goal},
+      content:{topic,action,goal,thoughtTopic,thoughtAction,thoughtGoal,thoughtUnknown},
       uncertainty:state?.unresolved?.slice?.(0,3)||[],
       justify:false,
       detail:"short",
@@ -102,6 +124,10 @@
     switch(frame.intent){
       case "ask_activity":
         plan.act="report_current_activity";
+        plan.detail="medium";
+        break;
+      case "ask_current_thought":
+        plan.act="report_current_thought";
         plan.detail="medium";
         break;
       case "ask_desired_action":
@@ -144,7 +170,7 @@
   }
 
   function verbalize(b,p){
-    const {topic,action,goal}=p.content;
+    const {topic,action,goal,thoughtTopic,thoughtAction,thoughtGoal,thoughtUnknown}=p.content;
     const hasWorld=(b.mem||[]).some(m=>m.type==="world");
 
     switch(p.act){
@@ -153,6 +179,19 @@
         if(topic)parts.push(`También tengo presente «${short(topic,70)}».`);
         else if(!hasWorld)parts.push("No hay ningún evento del entorno que requiera mi atención inmediata.");
         if(action&&hasWorld)parts.push(`Si tengo que actuar, mi siguiente inclinación es ${action}.`);
+        return parts.join(" ");
+      }
+
+      case "report_current_thought": {
+        const parts=[];
+        if(thoughtTopic)parts.push(`Ahora mismo tengo en mente «${short(thoughtTopic,76)}».`);
+        else parts.push("Ahora mismo estoy pensando en cómo interpretar bien la situación y qué información me falta antes de decidir.");
+        if(thoughtGoal)parts.push(`Mi foco mental es ${thoughtGoal}.`);
+        if(thoughtAction)parts.push(`La acción que estoy considerando es ${thoughtAction}.`);
+        if(thoughtUnknown){
+          if(/no hay un evento concreto del mundo activo/i.test(thoughtUnknown))parts.push("Aún no tengo un evento concreto del mundo sobre el que actuar.");
+          else parts.push(`Lo que todavía no tengo claro es ${thoughtUnknown}.`);
+        }
         return parts.join(" ");
       }
 
@@ -274,5 +313,5 @@
 
   ensurePlanner(brain);
   window.NpcIntResponsePlanner={buildPlan,verbalize,formatPlan};
-  print("system","","planificador de respuesta v0.2 cargado · NLP semántico → plan → lenguaje · salida sin métricas internas");
+  print("system","","planificador de respuesta v0.3 cargado · introspección cognitiva + NLP semántico → lenguaje");
 })();
