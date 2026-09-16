@@ -180,7 +180,7 @@ namespace NpcInt.Core
         {
             string wanted = Fold(lemma);
             for (int i = 0; i < tokens.Count; i++)
-                if (Fold(tokens[i].lemma) == wanted) return true;
+                if (Fold(tokens[i].lemma) == wanted || Fold(tokens[i].text) == wanted) return true;
             return false;
         }
 
@@ -209,18 +209,20 @@ namespace NpcInt.Core
                 ? analysis.frames[0]
                 : (analysis.sentences.Count > 0 ? analysis.sentences[0].semanticFrame : null);
 
-            bool question = frame != null && frame.speechType == "question";
+            bool question = frame != null && (frame.speechType == "question" || (frame.questionWords != null && frame.questionWords.Count > 0));
             bool second = SecondPerson(tokens);
             bool hacer = HasLemma(tokens, "hacer");
             bool querer = HasLemma(tokens, "querer");
             bool poder = HasLemma(tokens, "poder") || HasLemma(tokens, "saber");
             bool recordar = HasLemma(tokens, "recordar");
             bool entender = HasLemma(tokens, "entender") || HasLemma(tokens, "comprender");
+            bool pensar = HasLemma(tokens, "pensar") || (HasLemma(tokens, "tener") && HasLemma(tokens, "mente"));
             bool estar = HasLemma(tokens, "estar") || HasLemma(tokens, "sentir");
             bool ir = HasLemma(tokens, "ir");
 
             if (question && recordar && second) { act.Intent = "ask_memory_semantic"; act.Confidence = .93f; }
             else if (question && entender && second) { act.Intent = "ask_understanding"; act.Confidence = .94f; }
+            else if (question && pensar && second) { act.Intent = "ask_current_thought"; act.Confidence = .96f; }
             else if (question && poder && second) { act.Intent = "ask_capabilities"; act.Confidence = .91f; }
             else if (question && querer && second) { act.Intent = "ask_desired_action"; act.Confidence = .95f; }
             else if (question && hacer && second) { act.Intent = ir ? "ask_future_action" : "ask_activity"; act.Confidence = .95f; }
