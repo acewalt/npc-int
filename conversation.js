@@ -3,7 +3,7 @@
 (function(){
   function ensureDialogue(b){
     if(b.dialogue)return;
-    b.dialogue={turn:0,lastUser:"",lastNpc:"",lastIntent:"none",topic:null,pending:null,recentNpc:[]};
+    b.dialogue={turn:0,lastUser:"",lastNpc:"",lastIntent:"none",previousIntent:"none",topic:null,pending:null,recentNpc:[]};
   }
 
   const oldReset=NpcBrain.prototype.reset;
@@ -43,20 +43,20 @@
     ensureDialogue(this);
     let out=text;
     const recent=this.dialogue.recentNpc;
-    const duplicate=recent.some(x=>norm(x)===norm(out) || this.similarity(x,out)>.88);
+    const previous=recent.length?recent[recent.length-1]:null;
+    const exactDuplicate=previous && norm(previous)===norm(out);
+    const sameIntent=this.dialogue.lastIntent===this.dialogue.previousIntent;
 
-    if(duplicate){
-      const alternatives=[
-        "No tengo nada nuevo que añadir a eso por ahora.",
-        "Mi respuesta no ha cambiado, pero no quiero repetirte la misma frase.",
-        "Sigo en el mismo punto; necesitaría información nueva para responder distinto."
-      ];
-      out=pick(alternatives.filter(x=>!recent.includes(x)));
+    // Solo reformular si intentamos repetir literalmente la respuesta inmediatamente
+    // y el acto conversacional también es el mismo. Antes se usaba similitud global
+    // y eso convertía preguntas distintas en "mi respuesta no ha cambiado".
+    if(exactDuplicate && sameIntent){
+      out="No tengo información nueva desde mi respuesta anterior; si quieres, puedo explicar qué parte quedó sin resolver.";
     }
 
     this.dialogue.lastNpc=out;
     recent.push(out);
-    if(recent.length>6)recent.shift();
+    if(recent.length>8)recent.shift();
     this.remember("npc-speech",`${this.identity.name}: ${out}`,.46);
     return out;
   };
@@ -108,6 +108,7 @@
 
     const intent=this.intent(text);
     this.dialogue.lastUser=text;
+    this.dialogue.previousIntent=this.dialogue.lastIntent;
     this.dialogue.lastIntent=intent;
     this.dialogue.topic=this.topicFrom(text);
     this.thoughts(`${this.relation.name} dijo «${short(text,100)}»`);
@@ -196,8 +197,11 @@
         return this.say("No lo sé todavía. No tengo información suficiente para responder eso sin inventar.");
       }
 
-      case "short":
-        return this.say(pick(["Entiendo.","Vale, lo tengo en cuenta.","Te sigo.","Queda en el contexto de esta conversación."]));
+      case "short": {
+        const compact=text.trim();
+        if(compact.length<=18)return this.say(`No estoy seguro de qué relación quieres expresar con «${compact}». ¿Puedes completar la idea o decir a qué te refieres?`);
+        return this.say("Parece una frase incompleta. Prefiero pedir contexto antes que fingir que la entendí.");
+      }
 
       default: {
         const topic=this.topicFrom(text);
@@ -216,5 +220,5 @@
   };
 
   ensureDialogue(brain);
-  print("system","","capa conversacional v0.3 cargada · contexto entre turnos · anti-repetición");
+  print("system","","capa conversacional v0.4 cargada · contexto entre turnos · repetición sensible a intención");
 })();
