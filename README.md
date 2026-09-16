@@ -2,6 +2,14 @@
 
 `npc-int` es un experimento de NPC cognitivo local, pensado para terminar integrado en Unity. El objetivo no es simular consciencia real, sino construir un personaje que conserve identidad, memoria, conocimiento, estado interno, relaciones, objetivos y decisiones de forma separada y depurable.
 
+## Demo en vivo
+
+Prueba la terminal web del NPC aquí:
+
+**https://acewalt.github.io/npc-int/**
+
+La demo permite conversar con NIA-01, inspeccionar memoria y estado interno, probar conocimiento, gramática, eventos del mundo y comportamiento autónomo directamente desde el navegador, también en móvil.
+
 ## Capas actuales
 
 ```text
