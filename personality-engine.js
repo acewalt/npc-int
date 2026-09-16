@@ -22,19 +22,19 @@
   }
 
   function style(b,meta={}){
-    const p=ensure(b),r=window.NpcIntRelationship?.styleHint?.(b)||{casualness:.3,openness:.3,playfulness:.1,caution:.5,stage:"nuevo"};
+    const p=ensure(b),r=window.NpcIntRelationship?.styleHint?.(b)||{casualness:.3,openness:.3,playfulness:.1,caution:.5,stage:"nuevo",rapport:.3};
     const tension=b.relationshipModel?.tension??0,fear=b.mind?.affect?.fear??0,energy=b.mind?.needs?.energy??.8;
     const out={
       stage:r.stage,
-      warmth:clamp(.28+p.traits.empathy*.28+r.rapport*.20-tension*.22),
+      warmth:clamp(.28+p.traits.empathy*.28+(r.rapport??.3)*.20-tension*.22),
       casualness:clamp(r.casualness+p.traits.sociability*.12),
-      directness:clamp(p.traits.directness+(meta.repair?.18:0)+(tension>.4?.12:0)),
+      directness:clamp(p.traits.directness+(meta.repair ? .18 : 0)+(tension>.4 ? .12 : 0)),
       playfulness:clamp(p.traits.playfulness+r.playfulness*.45-fear*.35-tension*.55),
       curiosity:clamp(p.traits.curiosity*(b.mind?.cognition?.curiosity??.7)),
       patience:clamp(p.traits.patience-tension*.25),
       verbosity:meta.needsDetail?"medium":energy<.35?"short":r.stage==="cercano"?"short":"medium",
       epistemicCaution:clamp(p.traits.evidenceSeeking*.75+p.traits.caution*.25),
-      askFollowUp:meta.allowQuestion!==false && r.rapport>.34 && tension<.45
+      askFollowUp:meta.allowQuestion!==false && (r.rapport??.3)>.34 && tension<.45
     };
     p.lastStyle=out;return out;
   }
