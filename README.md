@@ -87,6 +87,60 @@ En la terminal:
 
 `/mind` muestra el último ciclo completo: percepción, estado, recuerdos relevantes, identidad, objetivos, opciones, consecuencias, conflictos, decisión y acción seleccionada.
 
+## Capa neuronal: Nanochat
+
+`npc-int` incluye una primera integración con **Nanochat de Andrej Karpathy** como capa neuronal opcional de lenguaje.
+
+La regla de arquitectura es:
+
+```text
+NpcInt.Core / MentalCycleEngine
+          |
+          | toma la decisión
+          v
+NeuralPromptBuilder
+          |
+          v
+Nanochat local bridge
+          |
+          v
+frase natural del NPC
+```
+
+Nanochat no controla directamente acciones físicas del juego. El motor simbólico decide; Nanochat verbaliza esa decisión o, en tareas futuras, devuelve interpretaciones que deben pasar por validación estructurada.
+
+Archivos principales:
+
+- `neural/nanochat.lock.json`: revisión fijada de Nanochat.
+- `neural/setup_nanochat.py`: clona esa revisión en `neural/vendor/nanochat`.
+- `neural/bridge/server.py`: bridge HTTP local con backend `mock` o `nanochat`.
+- `neural/bridge/protocol.schema.json`: contrato del bridge.
+- `src/NpcInt.Core/NeuralModels.cs`: DTOs, `INeuralLanguageModel` y `NeuralPromptBuilder`.
+- `unity/NanochatBridgeClient.cs`: cliente HTTP para Unity.
+- `unity/NpcNeuralDialogueBehaviour.cs`: convierte decisiones mentales en solicitudes neuronales.
+
+Prueba el bridge sin modelo:
+
+```bash
+python neural/bridge/server.py --backend mock
+```
+
+Instala la revisión fijada de Nanochat:
+
+```bash
+python neural/setup_nanochat.py
+cd neural/vendor/nanochat
+uv sync --extra gpu
+```
+
+En Windows con CUDA, después puede iniciarse con:
+
+```powershell
+.\neural\vendor\nanochat\.venv\Scripts\python.exe neural\bridge\server.py --backend nanochat --device-type cuda
+```
+
+La documentación completa está en `neural/README.md`.
+
 ## Capas actuales
 
 ```text
@@ -112,6 +166,8 @@ opciones + consecuencias + conflictos
           |
           v
 decisión por utilidad
+          |
+          +----> capa neuronal opcional (Nanochat) -> lenguaje natural
           |
           v
 respuesta / acción Unity
@@ -267,5 +323,6 @@ El proyecto mantiene separados:
 8. **Necesidades y afecto**: hambre, energía, miedo, curiosidad y relación.
 9. **Objetivos**: prioridades derivadas del estado actual.
 10. **Decisión**: comparación de acciones según utilidad, riesgo, coste y conflictos.
+11. **Lenguaje neuronal opcional**: Nanochat expresa o interpreta sin saltarse el motor de decisión.
 
 Esto evita que el NPC confunda “Andrés me dijo X” con “Wikipedia dice X”, una hipótesis propia con un hecho recuperado de una fuente externa o una emoción con una necesidad física.
