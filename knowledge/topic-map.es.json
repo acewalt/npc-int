@@ -1,0 +1,82 @@
+{
+  "version": 1,
+  "language": "es",
+  "topics": {
+    "matematicas": {
+      "label": "Matemáticas",
+      "keywords": ["matemática", "matemáticas", "álgebra", "geometría", "aritmética", "cálculo", "trigonometría", "estadística", "probabilidad", "teorema", "número", "ecuación", "matriz", "vector", "topología", "lógica matemática"]
+    },
+    "historia": {
+      "label": "Historia",
+      "keywords": ["historia", "histórico", "imperio", "reino", "guerra", "batalla", "revolución", "siglo", "dinastía", "civilización", "arqueología", "edad media", "antigüedad"]
+    },
+    "fisica": {
+      "label": "Física",
+      "keywords": ["física", "mecánica", "energía", "fuerza", "movimiento", "relatividad", "cuántica", "electromagnetismo", "termodinámica", "onda", "óptica", "partícula", "gravedad"]
+    },
+    "quimica": {
+      "label": "Química",
+      "keywords": ["química", "elemento químico", "compuesto", "molécula", "átomo", "reacción química", "ácido", "base", "enlace químico", "tabla periódica", "bioquímica"]
+    },
+    "biologia": {
+      "label": "Biología",
+      "keywords": ["biología", "especie", "organismo", "célula", "genética", "evolución", "ecología", "animal", "planta", "microbiología", "ADN", "genoma", "taxonomía"]
+    },
+    "medicina": {
+      "label": "Medicina y salud",
+      "keywords": ["medicina", "salud", "enfermedad", "síndrome", "anatomía", "fisiología", "tratamiento", "diagnóstico", "farmacología", "cirugía", "virus", "bacteria", "patología"]
+    },
+    "tecnologia": {
+      "label": "Tecnología e ingeniería",
+      "keywords": ["tecnología", "ingeniería", "máquina", "electrónica", "robótica", "telecomunicación", "motor", "dispositivo", "industria", "material", "automatización"]
+    },
+    "informatica": {
+      "label": "Informática e IA",
+      "keywords": ["informática", "computación", "software", "hardware", "programación", "algoritmo", "base de datos", "internet", "red informática", "inteligencia artificial", "aprendizaje automático", "red neuronal", "sistema operativo", "lenguaje de programación"]
+    },
+    "geografia": {
+      "label": "Geografía y lugares",
+      "keywords": ["geografía", "país", "ciudad", "municipio", "provincia", "departamento", "río", "montaña", "océano", "continente", "isla", "región", "capital", "geología"]
+    },
+    "astronomia": {
+      "label": "Astronomía",
+      "keywords": ["astronomía", "estrella", "planeta", "galaxia", "universo", "satélite", "asteroide", "cometa", "sistema solar", "cosmología", "agujero negro", "nebulosa"]
+    },
+    "filosofia": {
+      "label": "Filosofía",
+      "keywords": ["filosofía", "filósofo", "ética", "metafísica", "epistemología", "ontología", "estética", "razón", "conocimiento", "existencialismo", "estoicismo"]
+    },
+    "arte-literatura": {
+      "label": "Arte y literatura",
+      "keywords": ["arte", "literatura", "novela", "poesía", "poema", "escritor", "pintura", "escultura", "arquitectura", "música", "cine", "teatro", "fotografía"]
+    },
+    "lenguaje": {
+      "label": "Lengua y lingüística",
+      "keywords": ["lingüística", "idioma", "lengua", "gramática", "sintaxis", "semántica", "morfología", "fonética", "palabra", "verbo", "sustantivo", "oración", "dialecto", "etimología"]
+    },
+    "sociedad": {
+      "label": "Sociedad y cultura",
+      "keywords": ["sociedad", "cultura", "sociología", "antropología", "educación", "familia", "costumbre", "tradición", "demografía", "comunidad"]
+    },
+    "economia": {
+      "label": "Economía",
+      "keywords": ["economía", "mercado", "dinero", "finanzas", "banco", "comercio", "empresa", "inflación", "producto interno bruto", "macroeconomía", "microeconomía"]
+    },
+    "derecho-politica": {
+      "label": "Derecho y política",
+      "keywords": ["derecho", "ley", "constitución", "tribunal", "jurisprudencia", "política", "gobierno", "parlamento", "elección", "estado", "presidente", "democracia"]
+    },
+    "religion-mitologia": {
+      "label": "Religión y mitología",
+      "keywords": ["religión", "mitología", "dios", "diosa", "mito", "cristianismo", "islam", "judaísmo", "hinduismo", "budismo", "teología", "rito"]
+    },
+    "deportes": {
+      "label": "Deportes",
+      "keywords": ["deporte", "fútbol", "baloncesto", "tenis", "atletismo", "béisbol", "competición", "torneo", "liga", "olímpico", "equipo deportivo"]
+    },
+    "otros": {
+      "label": "Conocimiento general",
+      "keywords": []
+    }
+  }
+}
