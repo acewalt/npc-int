@@ -1,0 +1,29 @@
+name: Validate npc-int C# core
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - ".github/workflows/core-ci.yml"
+  pull_request:
+    paths:
+      - "src/**"
+      - ".github/workflows/core-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "8.0.x"
+      - name: Build core
+        run: dotnet build src/NpcInt.Core/NpcInt.Core.csproj --configuration Release --nologo
