@@ -6,7 +6,7 @@
   const VOCAB=[
     "que","quien","como","cuando","donde","porque","por","para","tienes","tiene","tengo","entiendes","entendiste","comprendes","comprendiste",
     "inteligencia","informacion","cuenta","registraste","registro","sigues","siguiendo","añadir","agregar","sabes","puedes","capaz","capacidad",
-    "recuerdas","piensas","quieres","necesitas","respondes","dices","dijiste","gusta","eres","soy","esto","eso","anterior","ultimo","significa"
+    "recuerdas","piensas","pensando","mente","quieres","necesitas","respondes","dices","dijiste","gusta","eres","soy","esto","eso","anterior","ultimo","significa"
   ];
 
   function ensureUnderstanding(b){
@@ -79,6 +79,7 @@
       else if((hasAny(t,"entiendes","entendiste","comprendes","comprendiste")&&hasAny(t,"que","esto","eso")) || /^que entend/.test(n)) intent="ask_understanding";
       else if(hasAny(t,"registraste","registro")&&hasAny(t,"que","cual")) intent="ask_registered";
       else if(hasAll(t,"tienes","cuenta")&&hasAny(t,"que","cual")) intent="ask_considering";
+      else if((hasAny(t,"piensas","pensando")&&hasAny(t,"que","en")) || (hasAll(t,"tienes","mente")&&hasAny(t,"que","en"))) intent="ask_current_thought";
       else if(hasAny(t,"informacion")&&hasAny(t,"para")&&hasAny(t,"que")) intent="ask_information_purpose";
       else if(hasAny(t,"sigues","siguiendo")&&hasAny(t,"que","por")) intent="ask_following";
       else if(hasAny(t,"añadir","agregar")&&hasAny(t,"que","cual")) intent="ask_what_add";
@@ -128,6 +129,18 @@
         if(x&&x.source&&UNorm(x.source)!==UNorm(f.raw))return `De «${x.source}» entendí: ${x.interpretation}.`;
         const prev=previousRelevantUser(b);
         return prev?`Del turno anterior «${prev}» intento conservar su intención y relación con lo que veníamos hablando. Puedes inspeccionar mi lectura con /understanding y, si está activo, /nlp last.`:"No tengo una interpretación anterior suficientemente clara para señalarla sin inventar.";
+      }
+
+      case "ask_current_thought": {
+        const s=b.cognitiveState?.current;
+        const g=s?.goal?.label||b.mind?.lastCycle?.goals?.[0]?.label;
+        const a=s?.action?.label||b.mind?.lastCycle?.decision?.label;
+        const pending=s?.unresolved?.[0];
+        const parts=["Ahora mismo estoy organizando lo que tengo activo en memoria de trabajo."];
+        if(g)parts.push(`Mi foco mental principal es ${g}.`);
+        if(a)parts.push(`La acción que estoy considerando es ${a}.`);
+        if(pending)parts.push(`Todavía tengo pendiente ${pending}.`);
+        return parts.join(" ");
       }
 
       case "ask_registered": {
@@ -271,5 +284,5 @@
 
   ensureUnderstanding(brain);
   window.NpcIntUnderstanding={canonical,classify};
-  print("system","","comprensión v1.0 cargada · NLP semántico primero · reglas tipográficas/heurísticas como fallback");
+  print("system","","comprensión v1.1 cargada · NLP semántico primero · introspección + fallback tipográfico");
 })();
