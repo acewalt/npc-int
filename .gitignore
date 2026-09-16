@@ -6,9 +6,18 @@
 /data/*.bz2
 /data/*.zim
 
+# Nanochat / pesos / checkouts locales
+/neural/vendor/
+/neural/checkpoints/
+/neural/cache/
+*.pt
+*.pth
+*.safetensors
+
 # Python
 __pycache__/
 *.pyc
+.venv/
 
 # SO / editores
 .DS_Store
