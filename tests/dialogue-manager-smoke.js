@@ -18,7 +18,15 @@ class NpcBrain{
     this.dialogue={lastNpc:"Puedo conectar Nanochat local.",lastUser:"vale",topic:"Nanochat local"};
     this.discourse={previousNpc:"Puedo conectar Nanochat local.",focus:[{kind:"interpretation",text:"Nanochat local"}],lastRegistered:null,lastCommitment:null,lastInterpretation:null};
     this.pragmatics={meaningfulTopic:"Nanochat local"};
-    this.mind={lastCycle:{goals:[{label:"reducir incertidumbre",priority:.72}],decision:{id:"ask",label:"preguntar",score:.66}}};
+    this.mind={lastCycle:{
+      goals:[{label:"reducir incertidumbre",priority:.72}],
+      decision:{id:"ask",label:"preguntar",score:.66},
+      options:[
+        {id:"ask",label:"preguntar",score:.66},
+        {id:"observe",label:"observar",score:.52},
+        {id:"wait",label:"esperar",score:.08}
+      ]
+    }};
     this.lastThoughts=[];
   }
   moodLabel(){return "neutral";}
@@ -41,12 +49,19 @@ const cases=[
   ["entonces por donde empezamos","ask_next_step"],
   ["por donde empezamos","ask_next_step"],
   ["que hacemos ahora","ask_next_step"],
+  ["y ahora","ask_next_step"],
+  ["que vas hacer","ask_future_action"],
+  ["que vas a hacer","ask_future_action"],
+  ["que piensas hacer ahora","ask_future_action"],
+  ["que te gustaria hacer","ask_desired_action"],
+  ["y que quieres hacer","ask_desired_action"],
   ["sigo aqui","presence"],
   ["aqui estoy","presence"],
   ["vale conectalo","directive_with_reference"],
   ["conectalo","directive_with_reference"],
   ["hazlo","directive_with_reference"],
-  ["eso que significa","ask_deictic_reference"]
+  ["eso que significa","ask_deictic_reference"],
+  ["vale","ack"]
 ];
 
 for(const [input,expected] of cases){
@@ -56,12 +71,14 @@ for(const [input,expected] of cases){
 
 const b=new NpcBrain();
 assert.match(b.hear("que pasa"),/Ahora mismo estoy/);
-assert.match(b.hear("entonces por donde empezamos"),/Empezaría|Podemos empezar/);
+assert.match(b.hear("entonces por donde empezamos"),/siguiente|Podemos seguir|aclarar|observar/i);
+assert.match(b.hear("y ahora"),/siguiente|Podemos seguir|aclarar|observar/i);
+assert.match(b.hear("que vas hacer"),/intención|voy a|Por ahora|observar/i);
+assert.match(b.hear("que te gustaria hacer"),/me inclino|prioridades|pref/i);
+assert.match(b.hear("vale"),/Vale|Entendido|De acuerdo/);
 assert.match(b.hear("sigo aqui"),/te tengo presente/i);
 assert.match(b.hear("vale conectalo"),/Nanochat|conexión neuronal/i);
 
-// Después de decir explícitamente que sigue presente, una comprobación automática
-// inmediata de presencia debe ser suprimida.
 b.time=20;
 b.hear("sigo aqui");
 b.time=22;
