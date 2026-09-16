@@ -5,7 +5,16 @@
 
   function ensureManager(b){
     if(b.dialogueManager)return b.dialogueManager;
-    b.dialogueManager={lastIntent:null,lastResolvedReference:null,lastUserAt:b.time||0,lastPresenceAt:-999,active:true,turns:0};
+    b.dialogueManager={
+      lastIntent:null,
+      lastCanonical:null,
+      sameIntentCount:0,
+      lastResolvedReference:null,
+      lastUserAt:b.time||0,
+      lastPresenceAt:-999,
+      active:true,
+      turns:0
+    };
     return b.dialogueManager;
   }
 
@@ -22,7 +31,16 @@
       [/\bq quieres hacer\b/g,"que quieres hacer"]
     ];
     for(const [r,v] of replacements)n=n.replace(r,v);
-    return n.replace(/\s+/g," ").trim();
+
+    // Marcadores del discurso no cambian la intención principal de la frase.
+    // "pero qué quieres hacer" y "bueno, qué quieres hacer" deben seguir
+    // clasificándose como la misma pregunta semántica.
+    let previous="";
+    while(n!==previous){
+      previous=n;
+      n=n.replace(/^(pero|bueno|entonces|mira|oye|pues|a ver|osea|o sea)\s+/," ").replace(/\s+/g," ").trim();
+    }
+    return n;
   }
 
   function classify(text){
@@ -38,7 +56,7 @@
     else if(/^(eso|esto|lo anterior|esa parte) (que es|que significa|como funciona)$/.test(n)) intent="ask_deictic_reference";
     else if(/^(vale|ok|okay|dale|bueno|listo|entiendo)$/.test(n)) intent="ack";
 
-    return {raw:text,canonical:n,intent};
+    return {raw:text,canonical:n,intent,repetition:1};
   }
 
   function latestFocus(b){
@@ -104,18 +122,34 @@
     return currentOptions(b).find(o=>useful.has(o.id)&&o.score>.16)||null;
   }
 
-  function futureAction(b){
+  function futureAction(b,repetition=1){
     const goal=topGoal(b),action=usefulAction(b),topic=latestFocus(b);
+    if(repetition>=3 && !action){
+      return "Dicho de la forma más concreta posible: todavía no tengo una acción física justificada. Necesito percibir algo del mundo —un objeto, una persona, un peligro, una necesidad o un cambio— y entonces sí elegiré qué hacer con ello.";
+    }
+    if(repetition>=2 && !action){
+      return `Más directo: quiero pasar de hablar a actuar. Mi prioridad es ${goal?.label||"obtener una situación concreta"}; necesito una percepción del entorno para convertirla en opciones y escoger una.`;
+    }
     if(action){
-      return `Ahora mismo mi intención más útil es ${action.label}${topic?` respecto a «${short(topic,66)}»`:""}. La escogería porque encaja mejor con mi objetivo actual${goal?` de ${goal.label}`:""}, con una utilidad estimada de ${Math.round((action.score||0)*100)}%.`;
+      const lead=repetition>=2?"Más concretamente, ":"";
+      return `${lead}ahora mismo mi intención más útil es ${action.label}${topic?` respecto a «${short(topic,66)}»`:""}. La escogería porque encaja mejor con mi objetivo actual${goal?` de ${goal.label}`:""}, con una utilidad estimada de ${Math.round((action.score||0)*100)}%.`;
     }
     if(topic)return `Por ahora voy a seguir trabajando sobre «${short(topic,72)}»: entender qué sé, qué me falta y qué opción tiene más sentido. No tengo una acción física mejor justificada todavía.`;
     return goal?`Por ahora voy a orientar mis siguientes decisiones a ${goal.label}. No tengo una acción física concreta suficientemente justificada todavía.`:"Todavía no tengo una acción concreta bien justificada; necesito una situación del mundo o un objetivo más definido.";
   }
 
-  function desiredAction(b){
+  function desiredAction(b,repetition=1){
     const goal=topGoal(b),action=usefulAction(b),topic=latestFocus(b);
-    if(action)return `Si elijo según mi estado y objetivos actuales, me inclino por ${action.label}${topic?` en relación con «${short(topic,62)}»`:""}. No es un deseo humano; es la opción que ahora encaja mejor con mis prioridades.`;
+    if(action){
+      if(repetition>=2)return `Más directo: quiero ${action.label}${topic?` respecto a «${short(topic,62)}»`:""}. Es la acción concreta que mejor encaja ahora con mis prioridades.`;
+      return `Si elijo según mi estado y objetivos actuales, me inclino por ${action.label}${topic?` en relación con «${short(topic,62)}»`:""}. No es un deseo humano; es la opción que ahora encaja mejor con mis prioridades.`;
+    }
+    if(repetition>=3){
+      return "Lo más concreto que puedo decir ahora es esto: quiero que ocurra algo que pueda percibir y sobre lo que pueda decidir por mí mismo. Sin un entorno o evento concreto, solo puedo describir prioridades, no ejecutar un propósito real.";
+    }
+    if(repetition>=2){
+      return `Más concreto: quiero obtener una situación del entorno, observarla y escoger una acción propia. Ahora mismo mi prioridad es ${goal?.label||"reducir incertidumbre"}, pero todavía me falta un objeto real sobre el que actuar.`;
+    }
     if(goal)return `Lo que más me inclina ahora es ${goal.label}. A partir de eso preferiría obtener una situación concreta y elegir una acción con consecuencias evaluables.`;
     return "No tengo un deseo humano estable ahora mismo. Necesito un objetivo o una situación concreta para que aparezca una preferencia de acción.";
   }
@@ -133,8 +167,8 @@
     switch(frame.intent){
       case "ask_situation": return describeSituation(b);
       case "ask_next_step": return nextStep(b);
-      case "ask_future_action": return futureAction(b);
-      case "ask_desired_action": return desiredAction(b);
+      case "ask_future_action": return futureAction(b,frame.repetition);
+      case "ask_desired_action": return desiredAction(b,frame.repetition);
       case "presence": return "Sí, te tengo presente en la conversación. No necesito comprobar si sigues aquí mientras acabas de interactuar conmigo.";
       case "directive_with_reference": return handleDirective(b);
       case "ask_deictic_reference": {
@@ -151,26 +185,33 @@
 
   function noteManagerTurn(b,frame,reply){
     const m=ensureManager(b);
-    m.turns++;
+    const same=m.lastIntent===frame.intent;
+    m.sameIntentCount=same?m.sameIntentCount+1:1;
     m.lastIntent=frame.intent;
+    m.lastCanonical=frame.canonical;
+    m.turns++;
     m.lastUserAt=b.time||0;
     if(frame.intent==="presence")m.lastPresenceAt=b.time||0;
     if(Array.isArray(b.lastThoughts)){
-      b.lastThoughts.push(`GESTOR DE DIÁLOGO: intención=${frame.intent}; canónico=«${frame.canonical}»`);
+      b.lastThoughts.push(`GESTOR DE DIÁLOGO: intención=${frame.intent}; repetición=${frame.repetition}; canónico=«${frame.canonical}»`);
       if(m.lastResolvedReference)b.lastThoughts.push(`REFERENCIA RESUELTA: ${m.lastResolvedReference}`);
     }
     if(reply&&b.discourse)b.discourse.lastInterpretation={source:frame.raw,interpretation:`gestor de diálogo: ${frame.intent}`,time:b.time||0,response:reply};
   }
 
   const oldReset=NpcBrain.prototype.reset;
-  NpcBrain.prototype.reset=function(){oldReset.call(this);this.dialogueManager={lastIntent:null,lastResolvedReference:null,lastUserAt:this.time||0,lastPresenceAt:-999,active:true,turns:0};};
+  NpcBrain.prototype.reset=function(){
+    oldReset.call(this);
+    this.dialogueManager={lastIntent:null,lastCanonical:null,sameIntentCount:0,lastResolvedReference:null,lastUserAt:this.time||0,lastPresenceAt:-999,active:true,turns:0};
+  };
 
   const oldHear=NpcBrain.prototype.hear;
   NpcBrain.prototype.hear=function(text){
-    ensureManager(this);
+    const manager=ensureManager(this);
     const frame=classify((text||"").trim());
-    this.dialogueManager.lastUserAt=this.time||0;
-    if(frame.intent==="presence")this.dialogueManager.lastPresenceAt=this.time||0;
+    frame.repetition=frame.intent&&manager.lastIntent===frame.intent?manager.sameIntentCount+1:1;
+    manager.lastUserAt=this.time||0;
+    if(frame.intent==="presence")manager.lastPresenceAt=this.time||0;
     if(!frame.intent)return oldHear.call(this,text);
 
     const originalSay=this.say;
@@ -212,6 +253,8 @@
     print("debug","DIALOGUE>",[
       `turnos gestionados=${m.turns}`,
       `última intención=${m.lastIntent||"—"}`,
+      `repeticiones consecutivas=${m.sameIntentCount}`,
+      `último canónico=${m.lastCanonical||"—"}`,
       `referencia resuelta=${m.lastResolvedReference||"—"}`,
       `último usuario=t+${m.lastUserAt}m`,
       `última presencia=t+${m.lastPresenceAt}m`,
@@ -221,5 +264,5 @@
 
   ensureManager(brain);
   window.NpcIntDialogueManager={canonical,classify,resolveReference};
-  print("system","","gestor de diálogo v0.2 cargado · continuidad · intención futura · referencias · arbitraje final");
+  print("system","","gestor de diálogo v0.3 cargado · continuidad · repetición intencional · referencias · arbitraje final");
 })();
