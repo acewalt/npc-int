@@ -63,9 +63,10 @@ def main() -> None:
     print("Nanochat listo.")
     print("Siguiente paso:")
     print(f"  cd {dest}")
-    print("  uv sync")
-    print("Después vuelve a npc-int y ejecuta:")
-    print("  python neural/bridge/server.py --backend auto")
+    print("  uv sync --extra gpu    # NVIDIA / CUDA")
+    print("  uv sync --extra cpu    # alternativa CPU/MPS")
+    print("Después vuelve a npc-int y ejecuta el bridge con el Python de ese entorno.")
+    print("Para probar sin checkpoint: python neural/bridge/server.py --backend mock")
 
 
 if __name__ == "__main__":
