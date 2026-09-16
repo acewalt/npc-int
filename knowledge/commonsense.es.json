@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "language": "es",
+  "relations": [
+    {"subject":"llave","predicate":"sirve_para","object":"abrir cerradura","confidence":0.94},
+    {"subject":"cerradura","predicate":"parte_de","object":"puerta","confidence":0.78},
+    {"subject":"puerta cerrada","predicate":"puede_requerir","object":"llave","confidence":0.62},
+    {"subject":"fuego","predicate":"puede_causar","object":"daño","confidence":0.95},
+    {"subject":"arma","predicate":"puede_causar","object":"daño","confidence":0.90},
+    {"subject":"hambre","predicate":"motiva","object":"buscar comida","confidence":0.88},
+    {"subject":"sed","predicate":"motiva","object":"buscar agua","confidence":0.91},
+    {"subject":"oscuridad","predicate":"reduce","object":"visibilidad","confidence":0.92},
+    {"subject":"lluvia","predicate":"puede_causar","object":"superficies mojadas","confidence":0.86},
+    {"subject":"persona","predicate":"es_un","object":"ser vivo","confidence":0.98},
+    {"subject":"perro","predicate":"es_un","object":"animal","confidence":0.99},
+    {"subject":"gato","predicate":"es_un","object":"animal","confidence":0.99},
+    {"subject":"animal","predicate":"es_un","object":"ser vivo","confidence":0.99},
+    {"subject":"árbol","predicate":"es_un","object":"ser vivo","confidence":0.98},
+    {"subject":"sol","predicate":"es_un","object":"estrella","confidence":0.99},
+    {"subject":"tierra","predicate":"es_un","object":"planeta","confidence":0.99}
+  ]
+}
