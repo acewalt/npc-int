@@ -8,7 +8,7 @@ Prueba la terminal web del NPC aquí:
 
 **https://acewalt.github.io/npc-int/**
 
-La demo permite conversar con NIA-01, inspeccionar memoria y estado interno, probar conocimiento, gramática, eventos del mundo, pragmática y comportamiento autónomo directamente desde el navegador, también en móvil.
+La demo permite conversar con NIA-01, inspeccionar memoria y estado interno, probar conocimiento, gramática, eventos del mundo, pragmática, discurso y comportamiento autónomo directamente desde el navegador, también en móvil.
 
 ## Ciclo mental
 
@@ -87,6 +87,25 @@ En la terminal:
 
 `/mind` muestra el último ciclo completo: percepción, estado, recuerdos relevantes, identidad, objetivos, opciones, consecuencias, conflictos, decisión y acción seleccionada.
 
+## Memoria de discurso
+
+`discourse.js` mantiene referencias entre turnos separadas de la memoria episódica. Guarda qué dijo el jugador, qué respondió NIA, qué interpretó, qué dijo que registraría o tendría en cuenta y qué expresiones figuradas utilizó.
+
+Esto permite resolver preguntas elípticas como:
+
+```text
+Jugador> no sé
+NIA-01> Entonces no voy a inventar una respuesta.
+Jugador> por qué hablas así
+NIA-01> Porque interpreté «no sé» como incertidumbre...
+
+Jugador> queda registrado
+Jugador> qué registraste
+NIA-01> Registré «...» como contexto conversacional...
+```
+
+También aplica anti-repetición a emisiones autónomas, no solo a respuestas de diálogo. Usa `/discourse` para inspeccionar el foco conversacional actual.
+
 ## Capa neuronal: Nanochat
 
 `npc-int` incluye una primera integración con **Nanochat de Andrej Karpathy** como capa neuronal opcional de lenguaje.
@@ -118,12 +137,24 @@ Archivos principales:
 - `src/NpcInt.Core/NeuralModels.cs`: DTOs, `INeuralLanguageModel` y `NeuralPromptBuilder`.
 - `unity/NanochatBridgeClient.cs`: cliente HTTP para Unity.
 - `unity/NpcNeuralDialogueBehaviour.cs`: convierte decisiones mentales en solicitudes neuronales.
+- `neural-web.js`: permite que la demo de GitHub Pages use el bridge Nanochat que corre en el PC del usuario.
 
 Prueba el bridge sin modelo:
 
 ```bash
 python neural/bridge/server.py --backend mock
 ```
+
+Desde la demo web:
+
+```text
+/neural check
+/neural on
+/neural status
+/neural off
+```
+
+La Page conserva el motor mental y la memoria en JavaScript; en modo neural manda al bridge la entrada, el ciclo mental, objetivos, decisión, discurso, memoria reciente y un borrador simbólico. Si el bridge no responde, hace fallback automático a la respuesta simbólica.
 
 Instala la revisión fijada de Nanochat:
 
@@ -150,7 +181,7 @@ entrada del jugador / mundo
 lenguaje y gramática ---- diccionario / modismos
           |
           v
-pragmática y contexto conversacional
+pragmática + memoria de discurso
           |
           +---- memoria episódica (lo que vivió)
           |
@@ -176,8 +207,9 @@ respuesta / acción Unity
 ### Archivos principales
 
 - `app.js`: cerebro web base, memoria e impulsos.
-- `conversation.js`: intención, contexto entre turnos y anti-repetición.
+- `conversation.js`: intención, contexto entre turnos y anti-repetición de diálogo.
 - `pragmatics.js`: actos de habla, tono, reparación conversacional y relación.
+- `discourse.js`: referencias entre turnos, compromisos, causalidad conversacional y anti-repetición global.
 - `cognition.js`: hechos, relaciones e inferencias simbólicas pequeñas.
 - `mental-cycle.js`: necesidades, objetivos, opciones, consecuencias y decisión por utilidad.
 - `grammar.js`: análisis y generación gramatical básica en español.
@@ -190,27 +222,7 @@ respuesta / acción Unity
 
 ## Wikipedia local dividida por temas
 
-El repositorio incluye un constructor para generar aproximadamente **300 MiB de texto de Wikipedia** dividido en shards pequeños y por dominios como:
-
-- matemáticas;
-- historia;
-- física;
-- química;
-- biología;
-- medicina;
-- tecnología;
-- informática e IA;
-- astronomía;
-- geografía;
-- filosofía;
-- arte y literatura;
-- lenguaje;
-- sociedad;
-- economía;
-- derecho y política;
-- religión y mitología;
-- deportes;
-- conocimiento general.
+El repositorio incluye un constructor para generar aproximadamente **300 MiB de texto de Wikipedia** dividido en shards pequeños y por dominios como matemáticas, historia, física, química, biología, medicina, tecnología, informática e IA, astronomía, geografía, filosofía, arte y literatura, lenguaje, sociedad, economía, derecho y política, religión y mitología, deportes y conocimiento general.
 
 La clasificación se configura en `knowledge/topic-map.es.json`.
 
@@ -261,29 +273,15 @@ El workflow descarga el dump oficial, genera `knowledge/wiki/`, comprueba que ni
 
 ## Gramática española
 
-`knowledge/grammar.es.json` contiene conocimiento operativo sobre:
+`knowledge/grammar.es.json` contiene conocimiento operativo sobre sujeto, verbo, objetos, atributos y complementos, concordancia, artículos y determinantes, negación, interrogación, conectores, pronombres, tiempos verbales básicos, verbos irregulares frecuentes y patrones de generación.
 
-- sujeto, verbo, objetos, atributos y complementos;
-- concordancia sujeto-verbo;
-- concordancia sustantivo-adjetivo;
-- artículos y determinantes;
-- negación;
-- interrogación;
-- conectores;
-- pronombres;
-- tiempos verbales básicos;
-- verbos irregulares frecuentes;
-- patrones de generación de oraciones.
-
-`grammar.js` usa esas reglas para analizar y construir frases. En la terminal:
+En la terminal:
 
 ```text
 /grammar La puerta está cerrada
 /grammar ¿Por qué Andrés cerró la puerta?
 /compose yo | querer | aprender más
 ```
-
-La gramática no sustituye un modelo de lenguaje completo. Sirve como estructura explícita para que el NPC pueda interpretar y generar oraciones de manera más consistente mientras el proyecto evoluciona.
 
 ## Comandos útiles
 
@@ -293,6 +291,10 @@ La gramática no sustituye un modelo de lenguaje completo. Sirve como estructura
 /thoughts
 /memory
 /mind
+/discourse
+/neural on
+/neural off
+/neural status
 /needs
 /goals
 /options
@@ -311,18 +313,6 @@ La gramática no sustituye un modelo de lenguaje completo. Sirve como estructura
 
 ## Principio de arquitectura
 
-El proyecto mantiene separados:
+El proyecto mantiene separados percepción, memoria episódica, conocimiento semántico, lexicón, gramática, pragmática, memoria de discurso, hechos/creencias, necesidades/afecto, objetivos, decisión y lenguaje neuronal opcional.
 
-1. **Percepción**: mensajes, eventos del mundo y paso del tiempo.
-2. **Memoria episódica**: cosas que el NPC vivió u oyó en la partida.
-3. **Conocimiento semántico**: Wikipedia, manuales, lore y otras fuentes.
-4. **Lexicón**: significado y uso contextual de palabras y modismos.
-5. **Gramática**: reglas sobre cómo se forman e interpretan oraciones.
-6. **Pragmática**: qué intenta hacer el interlocutor al hablar y con qué tono.
-7. **Hechos/creencias**: relaciones estructuradas e inferencias pequeñas.
-8. **Necesidades y afecto**: hambre, energía, miedo, curiosidad y relación.
-9. **Objetivos**: prioridades derivadas del estado actual.
-10. **Decisión**: comparación de acciones según utilidad, riesgo, coste y conflictos.
-11. **Lenguaje neuronal opcional**: Nanochat expresa o interpreta sin saltarse el motor de decisión.
-
-Esto evita que el NPC confunda “Andrés me dijo X” con “Wikipedia dice X”, una hipótesis propia con un hecho recuperado de una fuente externa o una emoción con una necesidad física.
+Esto evita que el NPC confunda “Andrés me dijo X” con “Wikipedia dice X”, una hipótesis propia con un hecho recuperado de una fuente externa, una emoción con una necesidad física o una referencia como “eso” con un tema completamente nuevo.
