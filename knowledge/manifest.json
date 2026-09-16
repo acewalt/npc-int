@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "language": "es",
+  "packs": [
+    {"type":"encyclopedia","path":"knowledge/core.es.json"},
+    {"type":"dictionary","path":"knowledge/dictionary.es.json"}
+  ]
+}
