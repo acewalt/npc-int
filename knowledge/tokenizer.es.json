@@ -1,0 +1,67 @@
+{
+  "version": 1,
+  "language": "es",
+  "standard": "Universal Dependencies compatible",
+  "multiwordExpressions": [
+    {"text":"por qué","kind":"interrogative","lemma":"por_qué"},
+    {"text":"qué onda","kind":"greeting","lemma":"qué_onda","register":"colloquial"},
+    {"text":"qué tal","kind":"greeting","lemma":"qué_tal"},
+    {"text":"qué más","kind":"greeting","lemma":"qué_más","register":"colombian_colloquial"},
+    {"text":"todo bien","kind":"social_formula","lemma":"todo_bien"},
+    {"text":"no sé","kind":"uncertainty","lemma":"no_saber"},
+    {"text":"ni idea","kind":"uncertainty","lemma":"ni_idea"},
+    {"text":"a lo mejor","kind":"epistemic","lemma":"a_lo_mejor"},
+    {"text":"tal vez","kind":"epistemic","lemma":"tal_vez"},
+    {"text":"sin embargo","kind":"connector","lemma":"sin_embargo"},
+    {"text":"por lo tanto","kind":"connector","lemma":"por_lo_tanto"},
+    {"text":"por eso","kind":"connector","lemma":"por_eso"},
+    {"text":"así que","kind":"connector","lemma":"así_que"},
+    {"text":"a pesar de","kind":"connector","lemma":"a_pesar_de"},
+    {"text":"en cambio","kind":"connector","lemma":"en_cambio"},
+    {"text":"es decir","kind":"reformulation","lemma":"es_decir"},
+    {"text":"o sea","kind":"reformulation","lemma":"o_sea"},
+    {"text":"de acuerdo","kind":"acknowledgement","lemma":"de_acuerdo"},
+    {"text":"por ahora","kind":"temporal","lemma":"por_ahora"},
+    {"text":"de repente","kind":"temporal","lemma":"de_repente"},
+    {"text":"tener en cuenta","kind":"verb_expression","lemma":"tener_en_cuenta"},
+    {"text":"dar cuenta","kind":"verb_expression","lemma":"dar_cuenta"},
+    {"text":"llevar a cabo","kind":"verb_expression","lemma":"llevar_a_cabo"},
+    {"text":"en vez de","kind":"connector","lemma":"en_vez_de"},
+    {"text":"al menos","kind":"quantifier","lemma":"al_menos"},
+    {"text":"más o menos","kind":"approximator","lemma":"más_o_menos"}
+  ],
+  "closedClass": {
+    "PRON": ["yo","tú","tu","usted","él","el","ella","ello","nosotros","nosotras","vosotros","vosotras","ustedes","ellos","ellas","me","te","se","lo","la","le","nos","os","los","las","les","mí","mi","ti","sí","quien","quién","quienes","quiénes","que","qué","cual","cuál","cuales","cuáles"],
+    "DET": ["el","la","los","las","un","una","unos","unas","este","esta","estos","estas","ese","esa","esos","esas","aquel","aquella","aquellos","aquellas","mi","mis","tu","tus","su","sus","nuestro","nuestra","nuestros","nuestras","cada","algún","alguna","ningún","ninguna"],
+    "ADP": ["a","ante","bajo","con","contra","de","desde","durante","en","entre","hacia","hasta","mediante","para","por","según","sin","sobre","tras"],
+    "CCONJ": ["y","e","o","u","pero","sino","ni"],
+    "SCONJ": ["que","si","aunque","porque","cuando","mientras","como","donde","aunque"],
+    "ADV": ["no","sí","si","ya","aquí","aca","acá","ahí","alli","allí","ahora","antes","después","luego","también","tampoco","muy","más","menos","bien","mal","quizá","quizás","nunca","siempre","todavía","aún"],
+    "INTJ": ["hola","hey","ey","buenas","ajá","aja","eh","ah","oh","uf","uff","mmm","hmm","vale"],
+    "PART": ["no","sí","se"]
+  },
+  "interrogatives": ["qué","quién","quiénes","cuál","cuáles","cómo","cuándo","dónde","por qué","cuánto","cuánta","cuántos","cuántas"],
+  "contractions": {
+    "al": ["a","el"],
+    "del": ["de","el"]
+  },
+  "clitics": ["me","te","se","lo","la","le","nos","os","los","las","les"],
+  "commonEntities": {
+    "NIA-01": "AGENT",
+    "Nanochat": "SOFTWARE",
+    "Unity": "SOFTWARE",
+    "Wikipedia": "KNOWLEDGE_SOURCE",
+    "Colombia": "GPE",
+    "Barranquilla": "GPE",
+    "Medellín": "GPE"
+  },
+  "slang": {
+    "caremonda": {"lemma":"caremonda","upos":"NOUN","register":"colombian_vulgar","pragmatics":"insult"},
+    "malparido": {"lemma":"malparido","upos":"NOUN","register":"vulgar","pragmatics":"insult"},
+    "bacano": {"lemma":"bacano","upos":"ADJ","register":"colombian_colloquial","meaning":"bueno o agradable"},
+    "chévere": {"lemma":"chévere","upos":"ADJ","register":"colloquial","meaning":"bueno o agradable"},
+    "parce": {"lemma":"parce","upos":"NOUN","register":"colombian_colloquial","meaning":"amigo o interlocutor informal"},
+    "pelao": {"lemma":"pelado","upos":"NOUN","register":"caribbean_colloquial"},
+    "vaina": {"lemma":"vaina","upos":"NOUN","register":"colloquial","meaning":"cosa, asunto o situación según contexto"}
+  }
+}
