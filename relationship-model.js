@@ -20,9 +20,9 @@
   function signals(text){
     const n=norm(text),ws=new Set(n.split(" "));
     const has=(...xs)=>xs.some(x=>n.includes(x));
-    const friendly=has("gracias","bacano","chevere","genial","me gusta hablar","amigo","amiga","parce")?.75:has("bien","vale","dale")?.25:0;
-    const hostile=has("malparido","hijueputa","idiota","imbecil","estupido","callate","largate")?.9:has("molesta","fastidias")?.45:0;
-    const apology=has("perdon","disculpa","lo siento")?.75:0;
+    const friendly=has("gracias","bacano","chevere","genial","me gusta hablar","amigo","amiga","parce") ? .75 : has("bien","vale","dale") ? .25 : 0;
+    const hostile=has("malparido","hijueputa","idiota","imbecil","estupido","callate","largate") ? .9 : has("molesta","fastidias") ? .45 : 0;
+    const apology=has("perdon","disculpa","lo siento") ? .75 : 0;
     const asksAboutNpc=/\b(tu|te)\b/.test(n)&&/\b(que|como|cual|donde|por que|porque)\b/.test(n);
     const selfDisclosure=/\b(me gusta|no me gusta|prefiero|quiero|estoy haciendo|estoy trabajando|me llamo|mi nombre es|hoy hice|ayer hice)\b/.test(n);
     const gratitude=ws.has("gracias")||n.includes("te agradezco");
@@ -43,8 +43,8 @@
     r.familiarity=clamp(r.familiarity+.012+Math.min(.018,r.interactions*.00035));
     r.trust=clamp(r.trust+s.friendly*.025+s.apology*.018-s.hostile*.08);
     r.comfort=clamp(r.comfort+s.friendly*.035+s.apology*.018-s.hostile*.10);
-    r.rapport=clamp(r.rapport+(s.selfDisclosure?.018:0)+(s.asksAboutNpc?.012:0)+(s.gratitude?.02:0)-s.hostile*.08);
-    r.reciprocity=clamp(r.reciprocity+(s.asksAboutNpc?.02:0)+(s.selfDisclosure?.01:0)-s.hostile*.025);
+    r.rapport=clamp(r.rapport+(s.selfDisclosure ? .018 : 0)+(s.asksAboutNpc ? .012 : 0)+(s.gratitude ? .02 : 0)-s.hostile*.08);
+    r.reciprocity=clamp(r.reciprocity+(s.asksAboutNpc ? .02 : 0)+(s.selfDisclosure ? .01 : 0)-s.hostile*.025);
     r.tension=clamp(r.tension*.82+s.hostile*.55-(s.apology+s.friendly)*.10);
     r.boundaryPressure=clamp(r.boundaryPressure*.88+s.hostile*.42);
     if(s.hostile>.45){r.hostileStreak++;r.positiveStreak=0;}else{r.hostileStreak=0;r.positiveStreak++;}
