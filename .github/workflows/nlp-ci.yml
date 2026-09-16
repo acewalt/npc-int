@@ -1,0 +1,59 @@
+name: Validate Spanish NLP bridge
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "nlp/**"
+      - "semantic-interpreter.js"
+      - "nlp-web.js"
+      - "understanding.js"
+      - "tests/semantic-interpreter-smoke.js"
+      - ".github/workflows/nlp-ci.yml"
+  pull_request:
+    paths:
+      - "nlp/**"
+      - "semantic-interpreter.js"
+      - "nlp-web.js"
+      - "understanding.js"
+      - "tests/semantic-interpreter-smoke.js"
+      - ".github/workflows/nlp-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  nlp-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+      - name: Python syntax
+        run: python -m py_compile nlp/server.py nlp/download_models.py
+      - name: Semantic interpreter test
+        run: node tests/semantic-interpreter-smoke.js
+      - name: Start dependency-free NLP fallback
+        run: |
+          python nlp/server.py --backend heuristic --port 8766 > /tmp/npc-int-nlp.log 2>&1 &
+          echo $! > /tmp/npc-int-nlp.pid
+          sleep 1
+      - name: Health check
+        run: curl --fail --silent http://127.0.0.1:8766/health
+      - name: Analysis contract smoke
+        run: |
+          curl --fail --silent \
+            -X POST http://127.0.0.1:8766/v1/analyze \
+            -H 'Content-Type: application/json' \
+            -d '{"text":"¿Qué quieres hacer ahora?"}' \
+          | python -c "import json,sys; d=json.load(sys.stdin); assert d['ok']; assert d['sentences']; assert 'frames' in d and 'coreferences' in d; print(d['backend'])"
+      - name: Stop service
+        if: always()
+        run: |
+          if [ -f /tmp/npc-int-nlp.pid ]; then kill $(cat /tmp/npc-int-nlp.pid) || true; fi
+          cat /tmp/npc-int-nlp.log || true
