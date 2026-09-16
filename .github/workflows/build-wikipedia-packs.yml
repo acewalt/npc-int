@@ -1,0 +1,78 @@
+name: Build Wikipedia knowledge packs
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_mib:
+        description: "Approximate total size to generate"
+        required: true
+        default: "300"
+      shard_mib:
+        description: "Maximum approximate shard size"
+        required: true
+        default: "4"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: wikipedia-knowledge-build
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Download latest Spanish Wikipedia articles dump
+        run: |
+          mkdir -p .cache/wiki
+          curl -L --fail --retry 4 --retry-delay 10 \
+            -o .cache/wiki/eswiki-latest-pages-articles.xml.bz2 \
+            https://dumps.wikimedia.org/eswiki/latest/eswiki-latest-pages-articles.xml.bz2
+
+      - name: Build topic-sharded web corpus
+        run: |
+          python tools/build_wikipedia_web.py \
+            .cache/wiki/eswiki-latest-pages-articles.xml.bz2 \
+            knowledge/wiki \
+            --target-mib "${{ inputs.target_mib }}" \
+            --shard-mib "${{ inputs.shard_mib }}"
+
+      - name: Verify no generated file exceeds GitHub hard limit
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          bad=[]
+          for p in Path('knowledge/wiki').rglob('*'):
+              if p.is_file() and p.stat().st_size >= 95*1024*1024:
+                  bad.append((p, p.stat().st_size))
+          if bad:
+              for p,s in bad:
+                  print(f'{p}: {s/1024/1024:.1f} MiB')
+              raise SystemExit('Generated files are too large')
+          print('All generated files are below 95 MiB.')
+          PY
+
+      - name: Commit generated knowledge
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add knowledge/wiki
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+          git commit -m "Build Wikipedia topic knowledge packs (${{ inputs.target_mib }} MiB target)"
+          git push
