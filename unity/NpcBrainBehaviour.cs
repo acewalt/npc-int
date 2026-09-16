@@ -1,3 +1,4 @@
+using System;
 using NpcInt.Core;
 using UnityEngine;
 
@@ -8,6 +9,9 @@ public sealed class NpcBrainBehaviour : MonoBehaviour
     [SerializeField] private float secondsPerBrainTick = 5f;
     [SerializeField] private float simulatedMinutesPerTick = 1f;
 
+    [Header("Debug")]
+    [SerializeField] private bool logSymbolicSpeech = true;
+
     private NpcBrain _brain;
     private MentalCycleEngine _mind;
     private float _timer;
@@ -15,6 +19,9 @@ public sealed class NpcBrainBehaviour : MonoBehaviour
     public NpcBrain Brain { get { return _brain; } }
     public MentalCycleEngine Mind { get { return _mind; } }
     public MentalCycleResult LastMentalCycle { get { return _mind != null ? _mind.LastCycle : null; } }
+
+    // Permite conectar una capa neuronal sin acoplarla al cerebro simbólico.
+    public event Action<BrainTurn, MentalCycleResult> TurnCompleted;
 
     private void Awake()
     {
@@ -31,24 +38,21 @@ public sealed class NpcBrainBehaviour : MonoBehaviour
 
         BrainTurn turn = _brain.Tick(simulatedMinutesPerTick);
         MentalCycleResult cycle = _mind.ThinkTime(simulatedMinutesPerTick);
-        DispatchMental(cycle);
-        Dispatch(turn);
+        CompleteTurn(turn, cycle);
     }
 
     public void HearPlayer(string text)
     {
         BrainTurn turn = _brain.ProcessMessage(text, "Jugador");
         MentalCycleResult cycle = _mind.ThinkMessage(text);
-        DispatchMental(cycle);
-        Dispatch(turn);
+        CompleteTurn(turn, cycle);
     }
 
     public void PerceiveWorldEvent(string description, float importance = 0.6f, float threat = 0f)
     {
         BrainTurn turn = _brain.ProcessWorldEvent(description, importance, threat);
         MentalCycleResult cycle = _mind.ThinkWorld(description, threat, importance);
-        DispatchMental(cycle);
-        Dispatch(turn);
+        CompleteTurn(turn, cycle);
     }
 
     public void SetHunger(float value)
@@ -61,14 +65,23 @@ public sealed class NpcBrainBehaviour : MonoBehaviour
         _mind.SetNeed("energy", value);
     }
 
+    private void CompleteTurn(BrainTurn turn, MentalCycleResult cycle)
+    {
+        DispatchMental(cycle);
+        Dispatch(turn);
+        Action<BrainTurn, MentalCycleResult> handler = TurnCompleted;
+        if (handler != null) handler(turn, cycle);
+    }
+
     private void Dispatch(BrainTurn turn)
     {
         if (turn == null || turn.Action == null) return;
 
-        if ((turn.Action.Kind == ActionKind.Speak || turn.Action.Kind == ActionKind.AskQuestion) &&
+        if (logSymbolicSpeech &&
+            (turn.Action.Kind == ActionKind.Speak || turn.Action.Kind == ActionKind.AskQuestion) &&
             !string.IsNullOrWhiteSpace(turn.Action.Utterance))
         {
-            Debug.Log(name + ": " + turn.Action.Utterance);
+            Debug.Log(name + " [symbolic]: " + turn.Action.Utterance);
         }
 
         if (turn.Action.Kind == ActionKind.Investigate)
