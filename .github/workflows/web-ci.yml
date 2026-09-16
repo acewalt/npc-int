@@ -5,11 +5,13 @@ on:
     branches: [main]
     paths:
       - "*.js"
+      - "tests/**"
       - "index.html"
       - ".github/workflows/web-ci.yml"
   pull_request:
     paths:
       - "*.js"
+      - "tests/**"
       - "index.html"
       - ".github/workflows/web-ci.yml"
 
@@ -29,3 +31,5 @@ jobs:
             echo "Checking $file"
             node --check "$file"
           done
+      - name: Understanding regression smoke test
+        run: node tests/understanding-smoke.js
