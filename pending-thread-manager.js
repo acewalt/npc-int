@@ -2,19 +2,28 @@
 
 (function(){
   const norm=s=>String(s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9ñ ]+/g," ").replace(/\s+/g," ").trim();
+  const sensitive=/\b(religion|religioso|religiosa|catolico|cristiano|musulman|politic|partido|voto|gay|lesbiana|bisexual|sexualidad|diagnostico|enfermedad|trastorno|sindrome|medicamento|adiccion)\b/i;
+  const trivial=/^(hola|buenas|hey|ey|vale|ok|okay|gracias|si|no|aja|mm+)$/;
   function ensure(b){if(b.pendingThreads)return b.pendingThreads;b.pendingThreads={version:1,seq:1,items:[]};return b.pendingThreads;}
   function add(b,kind,text,meta={}){
-    const s=ensure(b),clean=String(text||"").trim().replace(/[?!.]+$/g,"");if(!clean)return null;
+    const s=ensure(b),clean=String(text||"").trim().replace(/[?!.]+$/g,"");if(!clean||sensitive.test(norm(clean)))return null;
     const k=`${kind}:${norm(clean)}`;let x=s.items.find(i=>i.key===k&&i.status!=="resolved");
     if(x){x.lastTime=b.time||0;x.lastWallMs=Date.now();x.mentions++;x.priority=Math.max(x.priority,meta.priority??x.priority);return x;}
     x={id:s.seq++,key:k,kind,text:clean,status:"open",priority:meta.priority??.58,source:meta.source||"conversation",createdTime:b.time||0,lastTime:b.time||0,lastWallMs:Date.now(),mentions:1};s.items.push(x);if(s.items.length>60)s.items.shift();return x;
   }
+  function latestQuestion(b){return [...ensure(b).items].reverse().find(x=>x.kind==="question"&&x.status==="open")||null;}
   function noteUser(b,text){
     const raw=String(text||"").trim(),n=norm(raw),added=[];let m;
-    if((m=raw.match(/\bestoy (?:haciendo|creando|trabajando en|desarrollando|armando)\s+(.{2,140})/i)))added.push(add(b,"project",m[1],{priority:.78,source:"active-project"}));
-    if((m=raw.match(/\bquiero (?:hacer|crear|aprender|probar|terminar)\s+(.{2,140})/i)))added.push(add(b,"project",m[1],{priority:.75,source:"user-goal"}));
-    if((m=raw.match(/\b(?:despues|luego|mañana|más tarde|mas tarde)\s+(?:quiero |voy a |podemos )?(.{3,140})/i)))added.push(add(b,"future",m[1],{priority:.62,source:"future-mention"}));
-    if((m=raw.match(/\bno (?:hemos|alcanzamos a|pudimos)\s+(.{3,120})/i)))added.push(add(b,"unfinished",m[1],{priority:.66,source:"unfinished"}));
+    const pendingQuestion=latestQuestion(b);
+    if(pendingQuestion&&!trivial.test(n)&&n.length>1&&!/^que\b|^como\b|^por que\b|^porque\b|^cual\b|^quien\b|^donde\b|^cuando\b/.test(n))resolve(b,pendingQuestion.id,"user-answered");
+    else if(pendingQuestion&&/^(si|no|vale|ok|okay)$/.test(n))resolve(b,pendingQuestion.id,"user-answered");
+
+    if(!sensitive.test(n)){
+      if((m=raw.match(/\bestoy (?:haciendo|creando|trabajando en|desarrollando|armando)\s+(.{2,140})/i)))added.push(add(b,"project",m[1],{priority:.78,source:"active-project"}));
+      if((m=raw.match(/\bquiero (?:hacer|crear|aprender|probar|terminar)\s+(.{2,140})/i)))added.push(add(b,"project",m[1],{priority:.75,source:"user-goal"}));
+      if((m=raw.match(/\b(?:despues|luego|mañana|más tarde|mas tarde)\s+(?:quiero |voy a |podemos )?(.{3,140})/i)))added.push(add(b,"future",m[1],{priority:.62,source:"future-mention"}));
+      if((m=raw.match(/\bno (?:hemos|alcanzamos a|pudimos)\s+(.{3,120})/i)))added.push(add(b,"unfinished",m[1],{priority:.66,source:"unfinished"}));
+    }
     if(/\b(ya lo hice|ya termine|ya terminé|listo ya|lo termine|lo terminé)\b/.test(n)){
       const open=best(b);if(open)resolve(b,open.id,"user-completed");
     }
@@ -30,9 +39,9 @@
   function resolve(b,id,reason="resolved"){const x=ensure(b).items.find(i=>i.id===id||i.key===id);if(x){x.status="resolved";x.resolvedReason=reason;x.resolvedTime=b.time||0;}return x||null;}
   function snooze(b,id){const x=ensure(b).items.find(i=>i.id===id);if(x)x.status="snoozed";return x||null;}
   function reopen(b,id){const x=ensure(b).items.find(i=>i.id===id);if(x)x.status="open";return x||null;}
-  function snapshot(b){const s=ensure(b);return {version:1,seq:s.seq,items:s.items.map(x=>({...x}))};}
-  function restore(b,data){const s=ensure(b);if(!data||!Array.isArray(data.items))return s;s.items=data.items.slice(-60);s.seq=Math.max(1,...s.items.map(x=>Number(x.id)||0))+1;return s;}
+  function snapshot(b){const s=ensure(b);return {version:1,seq:s.seq,items:s.items.filter(x=>!sensitive.test(norm(x.text))).map(x=>({...x}))};}
+  function restore(b,data){const s=ensure(b);if(!data||!Array.isArray(data.items))return s;s.items=data.items.filter(x=>x&&x.text&&!sensitive.test(norm(x.text))).slice(-60);s.seq=Math.max(1,...s.items.map(x=>Number(x.id)||0))+1;return s;}
   function format(b){const s=ensure(b);return [`pendientes=${s.items.filter(x=>x.status==="open").length}`,...s.items.slice(-12).map(x=>`#${x.id} [${x.status}/${x.kind}] ${x.text} · prioridad=${x.priority.toFixed(2)}`)].join("\n");}
   window.NpcIntPending={ensure,add,noteUser,noteNpc,best,resolve,snooze,reopen,snapshot,restore,format};
-  print("system","","pendientes v1.1 cargados · proyectos activos + preguntas + asuntos sin cerrar");
+  print("system","","pendientes v1.2 cargados · proyectos + preguntas resueltas + filtro de datos sensibles");
 })();
