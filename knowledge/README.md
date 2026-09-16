@@ -14,11 +14,13 @@ Estas memorias pueden ser personales, incompletas o incluso equivocadas.
 
 ## 2. Conocimiento semántico
 
-Información de enciclopedias, manuales, libros u otras fuentes. La demo web carga `core.es.json`, un pack muy pequeño para probar la arquitectura.
+Información de enciclopedias, manuales, libros u otras fuentes. La demo web carga `core.es.json`, un pack pequeño para probar la arquitectura.
+
+Además, la Page puede consultar Wikipedia en español bajo demanda cuando una pregunta factual no está en el pack local. El artículo recuperado se conserva temporalmente como conocimiento semántico durante esa sesión.
 
 La versión local grande debe usar una base SQLite/FTS en vez de intentar cargar millones de artículos como JSON en el navegador.
 
-### Wikipedia completa
+### Wikipedia completa/offline
 
 1. Descarga un dump oficial `pages-articles` de la Wikipedia deseada desde Wikimedia Dumps.
 2. Ejecuta:
@@ -66,6 +68,22 @@ Ejemplo:
 ```
 
 El objetivo no es solo definir palabras: el lexicón debe ayudar a **interpretar intención**. `qué onda` no debería analizarse literalmente como una pregunta física sobre ondas.
+
+### Diccionario grande/offline
+
+Para construir una base léxica extensa a partir de un dump de Wiktionary/Wikcionario:
+
+```bash
+python tools/build_wiktionary_sqlite.py <dump.xml.bz2> data/dictionary-es.db
+```
+
+Prueba rápida:
+
+```bash
+python tools/build_wiktionary_sqlite.py <dump.xml.bz2> data/dictionary-test.db --limit 10000
+```
+
+Este primer importador conserva una versión textual limpia de cada entrada. Una fase posterior podrá extraer por separado acepciones, categoría gramatical, sinónimos, etimología y ejemplos.
 
 ## Arquitectura objetivo
 
