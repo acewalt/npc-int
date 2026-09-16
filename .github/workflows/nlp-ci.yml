@@ -42,9 +42,19 @@ jobs:
         run: |
           python nlp/server.py --backend heuristic --port 8766 > /tmp/npc-int-nlp.log 2>&1 &
           echo $! > /tmp/npc-int-nlp.pid
-          sleep 1
-      - name: Health check
-        run: curl --fail --silent http://127.0.0.1:8766/health
+      - name: Wait for health
+        shell: bash
+        run: |
+          set -euo pipefail
+          for i in {1..20}; do
+            if curl --fail --silent http://127.0.0.1:8766/health > /tmp/nlp-health.json; then
+              cat /tmp/nlp-health.json
+              exit 0
+            fi
+            sleep 0.5
+          done
+          cat /tmp/npc-int-nlp.log || true
+          exit 1
       - name: Analysis contract smoke
         run: |
           curl --fail --silent \
