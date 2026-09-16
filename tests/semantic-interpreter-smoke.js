@@ -33,6 +33,20 @@ assert.strictEqual(I.interpret("qué estás haciendo",a,{}).intent,"ask_activity
 
 a=analysis([
   t(1,"Qué","qué","PRON",{},"obj",3),
+  t(2,"estás","estar","AUX",{Person:"2",Tense:"Pres"},"aux",3),
+  t(3,"pensando","pensar","VERB",{VerbForm:"Ger"},"root",0)
+]);
+assert.strictEqual(I.interpret("Qué estás pensando",a,{}).intent,"ask_current_thought");
+
+a=analysis([
+  t(1,"En","en","ADP",{},"case",2),
+  t(2,"qué","qué","PRON",{},"obl",3),
+  t(3,"piensas","pensar","VERB",{Person:"2",Tense:"Pres"},"root",0)
+]);
+assert.strictEqual(I.interpret("en qué piensas",a,{}).intent,"ask_current_thought");
+
+a=analysis([
+  t(1,"Qué","qué","PRON",{},"obj",3),
   t(2,"quieres","querer","VERB",{Person:"2",Tense:"Pres"},"root",0),
   t(3,"hacer","hacer","VERB",{VerbForm:"Inf"},"xcomp",2)
 ],{predicate:{text:"quieres",lemma:"querer",upos:"VERB",feats:{Person:"2",Tense:"Pres"}}});
