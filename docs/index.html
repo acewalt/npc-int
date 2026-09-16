@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="dark" />
+  <title>npc-int // cognitive lab</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">NPC-INT / LOCAL COGNITIVE LAB</p>
+        <h1>Simulador de mente NPC</h1>
+      </div>
+      <div class="status-pill"><span id="liveDot"></span><span id="modeLabel">MANUAL</span></div>
+    </header>
+
+    <section class="grid">
+      <aside class="panel state-panel">
+        <div class="panel-head"><h2>Estado interno</h2><span id="clock">t+0m</span></div>
+        <div class="identity-card">
+          <div class="avatar">N</div>
+          <div><strong id="npcName">NIA-01</strong><small id="npcRole">agente NPC local</small></div>
+        </div>
+        <dl class="kv">
+          <div><dt>Ánimo</dt><dd id="mood">neutral</dd></div>
+          <div><dt>Impulso</dt><dd id="dominant">curiosidad</dd></div>
+          <div><dt>Interlocutor</dt><dd id="otherName">Jugador</dd></div>
+          <div><dt>Familiaridad</dt><dd id="familiarity">0.06</dd></div>
+          <div><dt>Memorias</dt><dd id="memoryCount">1</dd></div>
+        </dl>
+        <h3>Impulsos</h3>
+        <div id="drives" class="drive-list"></div>
+        <div class="buttons two">
+          <button id="tick1">+1 min</button>
+          <button id="tick5">+5 min</button>
+          <button id="autoBtn">Auto: OFF</button>
+          <button id="resetBtn" class="danger">Reset</button>
+        </div>
+      </aside>
+
+      <section class="panel terminal-panel">
+        <div class="panel-head">
+          <h2>Terminal de conversación</h2>
+          <span id="lastDecision">esperando estímulo</span>
+        </div>
+        <div id="transcript" class="transcript" aria-live="polite"></div>
+        <form id="chatForm" class="composer">
+          <span>&gt;</span>
+          <input id="input" autocomplete="off" placeholder="Escribe al NPC o usa /help" />
+          <button>Enviar</button>
+        </form>
+        <div class="quick">
+          <button data-prompt="¿Quién eres?">¿Quién eres?</button>
+          <button data-prompt="¿Cuál es tu propósito?">Tu propósito</button>
+          <button data-prompt="Me llamo Andrés">Aprender nombre</button>
+          <button data-prompt="¿Qué recuerdas de mí?">Memoria</button>
+        </div>
+      </section>
+
+      <aside class="panel thought-panel">
+        <div class="panel-head"><h2>Debug cognitivo</h2><span>inspectable</span></div>
+        <p class="muted">No es una cadena oculta: son estados de razonamiento del personaje diseñados para depurar el juego.</p>
+        <div id="thoughts" class="thoughts"></div>
+        <div class="decision-card">
+          <span>DECISIÓN</span>
+          <strong id="actionKind">None</strong>
+          <p id="actionReason">Aún no hay decisión.</p>
+          <div class="utility"><i id="utilityBar"></i></div>
+        </div>
+        <h3>Evento del mundo</h3>
+        <div class="event-box">
+          <input id="eventInput" placeholder="Ej. se apagaron las luces" />
+          <button id="eventBtn">Percibir</button>
+        </div>
+      </aside>
+    </section>
+
+    <footer>
+      Motor web de pruebas equivalente al prototipo C#. La versión Unity usará <code>NpcInt.Core</code> como fuente de verdad.
+    </footer>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>
