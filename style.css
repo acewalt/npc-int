@@ -1,0 +1,92 @@
+:root{
+  --bg:#050706;
+  --panel:#080c0a;
+  --line:#163023;
+  --text:#d7f7e4;
+  --muted:#6e8f7c;
+  --green:#70ff9f;
+  --green2:#2bcf68;
+  --blue:#7eb8ff;
+  --amber:#ffc66d;
+  --red:#ff7d86;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;
+  background:
+    radial-gradient(circle at 50% -20%,rgba(29,82,48,.22),transparent 38%),
+    #030504;
+  color:var(--text);
+  font-family:"Cascadia Code","JetBrains Mono","SFMono-Regular",Consolas,"Liberation Mono",monospace;
+  overflow:hidden;
+}
+button,input{font:inherit}
+.terminal-shell{
+  width:min(1180px,100vw);
+  height:100vh;
+  margin:0 auto;
+  display:grid;
+  grid-template-rows:48px 1fr auto;
+  background:rgba(4,8,6,.96);
+  border-left:1px solid #10241a;
+  border-right:1px solid #10241a;
+}
+.terminal-topbar{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:0 16px;
+  border-bottom:1px solid var(--line);
+  background:#07100b;
+  font-size:12px;
+}
+.brand{display:flex;align-items:center;gap:10px}
+.brand-mark{color:var(--green);font-weight:800;letter-spacing:.12em}
+.path{color:var(--muted)}
+.status{display:flex;align-items:center;gap:8px;color:#91b09c;font-size:11px}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 12px rgba(112,255,159,.8)}
+.terminal{
+  overflow:auto;
+  padding:20px 18px 28px;
+  scroll-behavior:smooth;
+  scrollbar-color:#244c34 transparent;
+}
+.line{margin:0 0 11px;white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px;line-height:1.62}
+.line .prefix{display:inline-block;min-width:94px;color:var(--muted)}
+.line.user .prefix{color:var(--blue)}
+.line.npc .prefix{color:var(--green)}
+.line.world .prefix{color:var(--amber)}
+.line.system{color:#71887a;font-size:12px}
+.line.debug{color:#91ac9b;font-size:12px}
+.line.error{color:var(--red)}
+.line .caret{color:var(--green)}
+.terminal-footer{border-top:1px solid var(--line);background:#06100a}
+.prompt-row{display:flex;align-items:center;gap:7px;padding:12px 14px}
+.prompt-user{color:var(--blue);font-size:12px}
+.prompt-symbol{color:var(--green);font-size:12px}
+.prompt-row input{
+  flex:1;
+  min-width:0;
+  border:0;
+  outline:0;
+  background:transparent;
+  color:#effff4;
+  caret-color:var(--green);
+  font-size:13px;
+}
+.prompt-row input::placeholder{color:#496154}
+.prompt-row button{
+  width:34px;height:30px;border:1px solid #235435;border-radius:5px;
+  background:#0b1f12;color:var(--green);cursor:pointer
+}
+.prompt-row button:hover{background:#10311a}
+.hint{padding:0 14px 10px;color:#486353;font-size:10px;letter-spacing:.02em}
+@media(max-width:700px){
+  .terminal-shell{border:0}
+  .terminal{padding:16px 12px 22px}
+  .line{font-size:12px}
+  .line .prefix{min-width:76px}
+  .prompt-user{display:none}
+  .hint{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+}
