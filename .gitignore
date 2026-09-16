@@ -1,0 +1,15 @@
+# Bases de conocimiento locales grandes
+/data/*.db
+/data/*.sqlite
+/data/*.sqlite3
+/data/*.xml
+/data/*.bz2
+/data/*.zim
+
+# Python
+__pycache__/
+*.pyc
+
+# SO / editores
+.DS_Store
+Thumbs.db
