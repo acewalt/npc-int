@@ -29,7 +29,25 @@ jobs:
           python-version: "3.12"
       - name: Syntax check
         run: |
-          python -m py_compile neural/setup_nanochat.py neural/bridge/server.py
+          python -m py_compile \
+            neural/setup_nanochat.py \
+            neural/bridge/server.py \
+            neural/training/npc_int_task.py
+      - name: Validate sample dataset JSONL
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('neural/datasets/npc-int-sft.sample.jsonl')
+          rows=0
+          for n,line in enumerate(p.read_text(encoding='utf-8').splitlines(),1):
+              if not line.strip(): continue
+              row=json.loads(line)
+              assert isinstance(row.get('messages'), list) and len(row['messages']) >= 2, n
+              rows += 1
+          assert rows >= 1
+          print(f'{rows} sample conversations valid')
+          PY
       - name: Start mock bridge
         run: |
           python neural/bridge/server.py --backend mock --port 8765 > /tmp/npc-int-bridge.log 2>&1 &
