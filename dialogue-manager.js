@@ -133,7 +133,7 @@
         const ref=resolveReference(b);
         return ref?`Entiendo que «eso» se refiere a «${short(ref,100)}». Si quieres explicarlo o usarlo para decidir, puedo trabajar desde esa referencia.`:"No tengo una referencia reciente suficientemente clara para «eso».";
       }
-      case "ack": return null; // dejar que las capas inferiores manejen confirmaciones normales
+      case "ack": return null;
       default:return null;
     }
   }
@@ -159,9 +159,6 @@
     this.dialogueManager={lastIntent:null,lastResolvedReference:null,lastUserAt:this.time||0,lastPresenceAt:-999,active:true,turns:0};
   };
 
-  // Capa final: deja que el resto del cerebro procese el turno para actualizar
-  // memoria/estado/ciclo mental, pero sustituye únicamente la frase superficial
-  // cuando tenemos una intención conversacional inequívoca.
   const oldHear=NpcBrain.prototype.hear;
   NpcBrain.prototype.hear=function(text){
     ensureManager(this);
@@ -200,10 +197,9 @@
       if(!out)return null;
       const sinceUser=(this.time||0)-this.dialogueManager.lastUserAt;
       const sincePresence=(this.time||0)-this.dialogueManager.lastPresenceAt;
-      // No preguntar si el usuario sigue presente cuando acaba de hablar, y
-      // no soltar monólogos autónomos demasiado rápido durante conversación activa.
-      if(/sigues ahi|sigues aquí/i.test(out) && (sinceUser<14 || sincePresence<24))return null;
-      if(sinceUser<10 && /no quiero limitarme|demasiadas preguntas|quiero aprender algo nuevo/i.test(out))return null;
+      const normalized=DMNorm(out);
+      if(normalized.includes("sigues ahi") && (sinceUser<14 || sincePresence<24))return null;
+      if(sinceUser<10 && /no quiero limitarme|demasiadas preguntas|quiero aprender algo nuevo/.test(normalized))return null;
       return out;
     };
     return reply&&typeof reply.then==="function"?reply.then(finish):finish(reply);
