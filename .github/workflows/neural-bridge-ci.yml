@@ -1,0 +1,51 @@
+name: Validate neural bridge
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "neural/**"
+      - "src/NpcInt.Core/NeuralModels.cs"
+      - "unity/NanochatBridgeClient.cs"
+      - "unity/NpcNeuralDialogueBehaviour.cs"
+      - "unity/NpcBrainBehaviour.cs"
+      - ".github/workflows/neural-bridge-ci.yml"
+  pull_request:
+    paths:
+      - "neural/**"
+      - "src/NpcInt.Core/NeuralModels.cs"
+      - "unity/NanochatBridgeClient.cs"
+      - "unity/NpcNeuralDialogueBehaviour.cs"
+      - "unity/NpcBrainBehaviour.cs"
+      - ".github/workflows/neural-bridge-ci.yml"
+
+jobs:
+  bridge-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Syntax check
+        run: |
+          python -m py_compile neural/setup_nanochat.py neural/bridge/server.py
+      - name: Start mock bridge
+        run: |
+          python neural/bridge/server.py --backend mock --port 8765 > /tmp/npc-int-bridge.log 2>&1 &
+          echo $! > /tmp/npc-int-bridge.pid
+          sleep 1
+      - name: Health check
+        run: curl --fail --silent http://127.0.0.1:8765/health
+      - name: Generation smoke test
+        run: |
+          curl --fail --silent \
+            -X POST http://127.0.0.1:8765/v1/generate \
+            -H 'Content-Type: application/json' \
+            -d '{"task":"utterance","context":{"decision":{"label":"preguntar por la llave"}}}' \
+            | python -c "import json,sys; d=json.load(sys.stdin); assert d['ok'] and d['backend']=='mock' and d['text']"
+      - name: Stop bridge
+        if: always()
+        run: |
+          if [ -f /tmp/npc-int-bridge.pid ]; then kill $(cat /tmp/npc-int-bridge.pid) || true; fi
+          cat /tmp/npc-int-bridge.log || true
