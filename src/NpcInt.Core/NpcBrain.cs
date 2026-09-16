@@ -36,6 +36,16 @@ namespace NpcInt.Core
 
         public BrainTurn ProcessMessage(string message, string speaker = "Jugador")
         {
+            return ProcessMessageInternal(message, speaker, null);
+        }
+
+        public BrainTurn ProcessMessageAnalyzed(string message, DialogueAct language, string speaker = "Jugador")
+        {
+            return ProcessMessageInternal(message, speaker, language);
+        }
+
+        private BrainTurn ProcessMessageInternal(string message, string speaker, DialogueAct language)
+        {
             message = (message ?? string.Empty).Trim();
             var stimulus = new Stimulus(StimulusType.UserMessage, speaker, message);
             AnalyzeStimulus(stimulus);
@@ -54,7 +64,15 @@ namespace NpcInt.Core
             ExtractFacts(message);
 
             var turn = BuildTurn(stimulus, current.Id);
-            turn.Action = DecideConversationAction(message, turn);
+            if (language != null)
+            {
+                string summary = DescribeLanguage(language);
+                turn.Thoughts.Insert(Math.Min(1, turn.Thoughts.Count),
+                    new Thought(ThoughtKind.Reflection, summary, Math.Max(0.55f, language.Confidence)));
+                Memory.Add("language", "nlp", summary, 0.40f, 0f);
+            }
+
+            turn.Action = DecideConversationAction(message, turn, language);
             ApplyActionEffects(turn.Action);
             return FinishTurn(turn);
         }
@@ -142,7 +160,7 @@ namespace NpcInt.Core
             return turn;
         }
 
-        private NpcAction DecideConversationAction(string message, BrainTurn turn)
+        private NpcAction DecideConversationAction(string message, BrainTurn turn, DialogueAct language)
         {
             string normalized = MemoryStore.Normalize(message);
             bool question = message.Contains("?") || StartsWithAny(normalized, "quien", "que", "como", "cuando", "donde", "por que", "porque", "cual", "puedes", "sabes");
@@ -157,6 +175,9 @@ namespace NpcInt.Core
 
             if (turn.Stimulus.Threat > 0.55f)
                 return Speak("Eso eleva mi nivel de alerta. Prefiero entender qué está pasando antes de actuar a ciegas.", "el estímulo fue interpretado como amenaza", 0.95f);
+
+            NpcAction semantic = DecideSemanticConversationAction(language, message);
+            if (semantic != null) return semantic;
 
             string identityReply = IdentityReply(normalized);
             if (identityReply != null)
@@ -187,6 +208,97 @@ namespace NpcInt.Core
                 return Ask("Dices «" + Shorten(message, 72) + "». ¿Qué parte de eso debería considerar importante?", "la curiosidad supera el umbral y el mensaje aporta información nueva", 0.68f);
 
             return Speak(Pick("Entiendo. Lo guardaré como parte del contexto.", "Lo recordaré. Puede cambiar lo que haga después.", "Queda registrado; todavía no sé cuánto debería pesar en mis decisiones."), "respuesta social mínima ante una afirmación", 0.58f);
+        }
+
+        private NpcAction DecideSemanticConversationAction(DialogueAct language, string message)
+        {
+            if (language == null || string.IsNullOrWhiteSpace(language.Intent)) return null;
+
+            switch (language.Intent)
+            {
+                case "ask_activity":
+                    return Speak("Ahora mismo estoy procesando lo que dices, manteniendo memoria del contexto y evaluando mi siguiente decisión.",
+                        "acto de diálogo NLP: actividad presente", 0.95f);
+
+                case "ask_desired_action":
+                    return Speak("Ahora mismo quiero " + GoalThought(Drives.DominantName()).Replace("Quiero ", string.Empty).TrimEnd('.') + ".",
+                        "acto de diálogo NLP: intención/preferencia actual", 0.95f);
+
+                case "ask_future_action":
+                    return Speak(DescribeNextIntention(), "acto de diálogo NLP: acción futura", 0.95f);
+
+                case "ask_capabilities":
+                    return Speak("Puedo mantener memoria, estado interno, relaciones, objetivos y decisiones. Si recibo análisis NLP también puedo usar lemas, morfología, dependencias, entidades y referencias para interpretar mejor lo que dices.",
+                        "acto de diálogo NLP: consulta de capacidades", 0.97f);
+
+                case "ask_memory_semantic":
+                    return Speak(DescribeRecentMemory(), "acto de diálogo NLP: recuperación de memoria", 0.95f);
+
+                case "ask_understanding":
+                    return Speak(DescribeUnderstanding(language), "acto de diálogo NLP: petición de interpretación", 0.95f);
+
+                case "ask_state":
+                    return Speak("Ahora estoy " + Mood.Label + ". Mi impulso dominante es " + Drives.DominantName() + ".",
+                        "acto de diálogo NLP: consulta del estado interno", 0.95f);
+
+                default:
+                    return null;
+            }
+        }
+
+        private string DescribeLanguage(DialogueAct language)
+        {
+            var parts = new List<string>();
+            if (!string.IsNullOrWhiteSpace(language.Intent)) parts.Add("intención=" + language.Intent);
+            if (!string.IsNullOrWhiteSpace(language.Predicate)) parts.Add("predicado=" + language.Predicate);
+            if (!string.IsNullOrWhiteSpace(language.Agent)) parts.Add("agente=" + language.Agent);
+            if (!string.IsNullOrWhiteSpace(language.Patient)) parts.Add("paciente=" + language.Patient);
+            if (language.Negative) parts.Add("polaridad=negativa");
+            if (language.Entities != null && language.Entities.Count > 0)
+                parts.Add("entidades=" + string.Join(", ", language.Entities.Take(4).Select(x => x.text + ":" + x.type).ToArray()));
+            if (language.Coreferences != null && language.Coreferences.Count > 0)
+                parts.Add("referencias=" + string.Join(", ", language.Coreferences.Take(3).Select(x => x.mention + "→" + x.antecedent).ToArray()));
+            return "Análisis lingüístico: " + (parts.Count > 0 ? string.Join("; ", parts.ToArray()) : "sin acto semántico resuelto") + ".";
+        }
+
+        private string DescribeUnderstanding(DialogueAct language)
+        {
+            var parts = new List<string>();
+            if (!string.IsNullOrWhiteSpace(language.Intent)) parts.Add("lo interpreto como «" + language.Intent + "»");
+            if (!string.IsNullOrWhiteSpace(language.Predicate)) parts.Add("el predicado principal es «" + language.Predicate + "»");
+            if (!string.IsNullOrWhiteSpace(language.Agent)) parts.Add("el agente parece ser «" + language.Agent + "»");
+            if (!string.IsNullOrWhiteSpace(language.Patient)) parts.Add("el objeto o paciente parece ser «" + language.Patient + "»");
+            if (language.Coreferences != null && language.Coreferences.Count > 0)
+                parts.Add("resuelvo «" + language.Coreferences[0].mention + "» como referencia a «" + language.Coreferences[0].antecedent + "»");
+            return parts.Count == 0
+                ? "Entendí el mensaje, pero todavía no puedo resumir su estructura semántica con suficiente seguridad."
+                : "De tu frase, " + string.Join("; ", parts.ToArray()) + ".";
+        }
+
+        private string DescribeRecentMemory()
+        {
+            List<MemoryEntry> items = Memory.Items
+                .Where(x => x.Kind != "npc-speech" && x.Kind != "language")
+                .Reverse()
+                .Take(4)
+                .ToList();
+            if (items.Count == 0)
+                return "Todavía no tengo recuerdos significativos suficientes.";
+            return "Lo más reciente que recuerdo es: " + string.Join(" | ", items.Select(x => "[" + x.Kind + "] " + x.Text).ToArray()) + ".";
+        }
+
+        private string DescribeNextIntention()
+        {
+            switch (Drives.DominantName())
+            {
+                case "amenaza": return "Primero voy a reducir el riesgo y observar qué está ocurriendo antes de hacer algo más.";
+                case "curiosidad": return "Voy a intentar obtener información concreta antes de elegir una acción más costosa.";
+                case "social": return "Voy a mantener la conversación y comprobar qué información necesito de ti.";
+                case "fatiga": return "Voy a reducir actividad y conservar recursos mientras no haya una urgencia.";
+                case "propósito": return "Voy a buscar una acción que encaje con mi propósito y con lo que sé del entorno.";
+                case "autonomía": return "Voy a intentar iniciar una acción propia en vez de limitarme a esperar una orden.";
+                default: return "Voy a observar el contexto antes de decidir el siguiente paso.";
+            }
         }
 
         private NpcAction DecideWorldAction(BrainTurn turn)
