@@ -43,7 +43,7 @@
   }
 
   function griefAnswer(){
-    return "Lo siento. Si ocurrió ayer, es algo muy reciente. No voy a tratarlo como algo emocionante ni mezclarlo con otros temas. Si quieres hablar de tu mascota o contarme qué pasó, te escucho; y si prefieres cambiar de tema, también está bien.";
+    return "Lo siento. Si ocurrió ayer, es algo muy reciente. No voy a mezclarlo con otros temas ni minimizar lo que pasó. Si quieres hablar de tu mascota o contarme qué ocurrió, te escucho; y si prefieres cambiar de tema, también está bien.";
   }
 
   function lonelinessAnswer(b,frame){
