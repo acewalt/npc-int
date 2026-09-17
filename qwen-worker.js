@@ -3,9 +3,10 @@ import {
   AutoModelForCausalLM,
   TextStreamer,
   InterruptableStoppingCriteria,
-} from "https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.0";
+} from "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.7.1";
 
 const MODEL_ID="onnx-community/Qwen3-0.6B-ONNX";
+const RUNTIME_VERSION="transformers.js@3.7.1";
 
 let tokenizer=null;
 let model=null;
@@ -14,10 +15,19 @@ let loadingPromise=null;
 let generationChain=Promise.resolve();
 const stoppingCriteria=new InterruptableStoppingCriteria();
 
+function isFatalRuntimeError(error){
+  const message=String(error?.message||error||"").toLowerCase();
+  return message.includes("memory access out of bounds")||
+    message.includes("out of memory")||
+    message.includes("device lost")||
+    message.includes("gpu device");
+}
+
 function fail(error,requestId=null){
   self.postMessage({
     status:"error",
     requestId,
+    fatal:isFatalRuntimeError(error),
     error:String(error?.message||error||"Error desconocido")
   });
 }
@@ -58,15 +68,32 @@ async function load(){
 
     [tokenizer,model]=await Promise.all([tokenizerPromise,modelPromise]);
 
-    self.postMessage({status:"loading",data:"Compilando shaders..."});
-    const warmup=tokenizer("Hola");
-    await model.generate({...warmup,max_new_tokens:1,do_sample:false});
+    self.postMessage({status:"loading",data:"Compilando shaders y verificando generación..."});
+
+    // El warmup usa la misma ruta de chat que una respuesta real. Así "ready"
+    // significa que no solo cargó los pesos, sino que pudo ejecutar generate().
+    const warmupMessages=[
+      {role:"system",content:"Responde de forma breve."},
+      {role:"user",content:"Hola"}
+    ];
+    const warmup=tokenizer.apply_chat_template(warmupMessages,{
+      add_generation_prompt:true,
+      return_dict:true,
+      enable_thinking:false
+    });
+    await model.generate({
+      ...warmup,
+      max_new_tokens:1,
+      do_sample:false,
+      return_dict_in_generate:true
+    });
 
     self.postMessage({
       status:"ready",
       modelId:MODEL_ID,
       device:"webgpu",
-      dtype
+      dtype,
+      runtimeVersion:RUNTIME_VERSION
     });
 
     return {tokenizer,model,dtype};
@@ -74,6 +101,11 @@ async function load(){
 
   try{
     return await loadingPromise;
+  }catch(error){
+    tokenizer=null;
+    model=null;
+    dtype=null;
+    throw error;
   }finally{
     loadingPromise=null;
   }
@@ -100,6 +132,14 @@ async function generate(requestId,data){
       enable_thinking:false
     });
 
+    const dims=inputs?.input_ids?.dims;
+    const inputTokens=Array.isArray(dims)&&dims.length?Number(dims[dims.length-1]):null;
+    self.postMessage({
+      status:"generation-start",
+      requestId,
+      inputTokens:Number.isFinite(inputTokens)?inputTokens:null
+    });
+
     let output="";
     const streamer=new TextStreamer(tokenizer,{
       skip_prompt:true,
@@ -111,11 +151,11 @@ async function generate(requestId,data){
       ...inputs,
       do_sample:true,
       temperature:Number(data?.temperature)||0.55,
-      top_k:Number(data?.topK)||30,
-      repetition_penalty:1.08,
-      max_new_tokens:Number(data?.maxNewTokens)||220,
+      top_k:Number(data?.topK)||20,
+      max_new_tokens:Number(data?.maxNewTokens)||180,
       streamer,
-      stopping_criteria:stoppingCriteria
+      stopping_criteria:stoppingCriteria,
+      return_dict_in_generate:true
     });
 
     self.postMessage({status:"result",requestId,text:clean(output)});
