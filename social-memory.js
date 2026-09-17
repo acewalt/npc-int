@@ -13,14 +13,29 @@
   }
 
   function keyOf(kind,value){return `${kind}:${norm(value)}`;}
+  function slotOf(kind,value){
+    if(!["like","preference"].includes(kind))return null;
+    const n=norm(value);
+    if(/\b(?:color )?(?:rojo|azul|verde|amarillo|negro|blanco|morado|violeta|rosa|rosado|naranja|gris|cafe|marron)\b/.test(n))return "color";
+    return null;
+  }
+  function deactivateSlot(s,slot,exceptKey=null){
+    if(!slot)return;
+    for(const item of s.items){
+      if(item.slot===slot&&item.key!==exceptKey&&item.active!==false)item.active=false;
+    }
+  }
   function add(b,kind,value,meta={}){
     const s=ensure(b),clean=String(value||"").trim().replace(/[.!?]+$/g,"").trim();
     if(!clean||clean.length<2||sensitive.test(clean))return null;
-    const key=keyOf(kind,clean),existing=s.items.find(x=>x.key===key);
+    const key=keyOf(kind,clean),slot=slotOf(kind,clean),existing=s.items.find(x=>x.key===key);
     if(existing){
+      deactivateSlot(s,slot,key);
+      existing.active=true;existing.slot=slot||existing.slot||null;
       existing.mentions++;existing.lastMentionedTime=b.time||0;existing.lastMentionedWallMs=Date.now();existing.importance=Math.min(1,Math.max(existing.importance,meta.importance??.55)+.025);existing.confidence=Math.max(existing.confidence,meta.confidence??.82);return existing;
     }
-    const item={id:s.seq++,key,kind,value:clean,subject:meta.subject||"user",source:meta.source||"explicit-user",confidence:meta.confidence??.9,importance:meta.importance??.58,time:b.time||0,wallMs:Date.now(),lastMentionedTime:b.time||0,lastMentionedWallMs:Date.now(),mentions:1,tone:meta.tone||"neutral",tags:meta.tags||[]};
+    deactivateSlot(s,slot);
+    const item={id:s.seq++,key,kind,value:clean,slot,active:true,subject:meta.subject||"user",source:meta.source||"explicit-user",confidence:meta.confidence??.9,importance:meta.importance??.58,time:b.time||0,wallMs:Date.now(),lastMentionedTime:b.time||0,lastMentionedWallMs:Date.now(),mentions:1,tone:meta.tone||"neutral",tags:meta.tags||[]};
     s.items.push(item);
     if(s.items.length>120)s.items.sort((a,c)=>(c.importance+c.mentions*.03)-(a.importance+a.mentions*.03)).splice(120);
     return item;
@@ -55,7 +70,7 @@
 
   function recall(b,query,count=4,opts={}){
     const s=ensure(b),now=Date.now();
-    return s.items.map(item=>{
+    return s.items.filter(item=>item.active!==false).map(item=>{
       const sim=similarity(query,item),recency=Math.exp(-Math.max(0,now-(item.lastMentionedWallMs||now))/(1000*60*60*24*14));
       const kindBoost=Array.isArray(opts.kinds)&&opts.kinds.includes(item.kind) ? .18 : 0;
       return {item,score:sim*.62+item.importance*.22+Math.min(.1,item.mentions*.018)+recency*.06+kindBoost};
@@ -63,7 +78,7 @@
   }
 
   function profile(b){
-    const s=ensure(b),best=kind=>s.items.filter(x=>x.kind===kind).sort((a,c)=>(c.importance+c.mentions*.03)-(a.importance+a.mentions*.03)).slice(0,5);
+    const s=ensure(b),best=kind=>s.items.filter(x=>x.kind===kind&&x.active!==false).sort((a,c)=>(c.lastMentionedWallMs||0)-(a.lastMentionedWallMs||0)||(c.importance+c.mentions*.03)-(a.importance+a.mentions*.03)).slice(0,5);
     return {name:best("name")[0]?.value||b.relation?.name||"Jugador",likes:best("like"),dislikes:best("dislike"),preferences:best("preference"),projects:best("project"),goals:best("goal"),updates:best("shared-update")};
   }
 
@@ -72,6 +87,6 @@
   function clear(b){const s=ensure(b);s.items=[];s.seq=1;s.lastExtracted=[];}
   function format(b){const p=profile(b),s=ensure(b);const rows=s.items.slice(-12).map(x=>`#${x.id} [${x.kind}] ${x.value} · imp=${x.importance.toFixed(2)} · menciones=${x.mentions}`);return [`persona=${p.name}`,`recuerdos sociales=${s.items.length}`,...rows].join("\n");}
 
-  window.NpcIntSocialMemory={ensure,add,extract,noteTurn,recall,profile,snapshot,restore,clear,format};
-  print("system","","memoria social v1.0 cargada · preferencias explícitas + proyectos + continuidad compartida");
+  window.NpcIntSocialMemory={ensure,add,extract,noteTurn,recall,profile,snapshot,restore,clear,format,slotOf};
+  print("system","","memoria social v1.1 cargada · preferencias por categoría + recencia + continuidad compartida");
 })();
