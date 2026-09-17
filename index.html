@@ -9,6 +9,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>npc-int // terminal</title>
   <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="copy-chat.css" />
 </head>
 <body>
   <main class="terminal-shell" aria-label="Terminal NPC-INT">
@@ -17,9 +18,15 @@
         <span class="brand-mark">NPC-INT</span>
         <span class="path">~/nia-01</span>
       </div>
-      <div class="status" title="Estado del agente">
-        <span class="dot"></span>
-        <span id="statusText">ONLINE · AUTO</span>
+      <div class="topbar-actions">
+        <div class="status" title="Estado del agente">
+          <span class="dot"></span>
+          <span id="statusText">ONLINE · AUTO</span>
+        </div>
+        <button id="copyChat" class="copy-chat-button" type="button" aria-label="Copiar todo el chat" title="Copiar todo el contenido del chat">
+          <span class="copy-chat-icon" aria-hidden="true">⧉</span>
+          <span class="copy-chat-label">Copiar<span class="copy-chat-extra"> chat</span></span>
+        </button>
       </div>
     </header>
 
@@ -79,5 +86,6 @@
   <script src="neural-web.js"></script>
   <script src="output-safety.js"></script>
   <script src="conversation-quality.js"></script>
+  <script src="copy-chat.js"></script>
 </body>
 </html>
