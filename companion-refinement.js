@@ -93,8 +93,12 @@
   }
 
   function registerTransientState(b,frame){
-    if(!frame.affect)return;
     if(!b.companionState)b.companionState={};
+    if(!frame.affect){
+      b.companionState.lastUserAffect=null;
+      if(b.companionState.lastPlan)b.companionState.lastPlan.userAffect=null;
+      return;
+    }
     b.companionState.lastUserAffect={...frame.affect,wallMs:Date.now(),source:"explicit-language",persistent:false};
     if(b.companionState.lastPlan)b.companionState.lastPlan.userAffect=frame.affect.kind;
   }
