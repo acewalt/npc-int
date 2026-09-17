@@ -43,6 +43,7 @@ require("../social-timing.js");
 require("../initiative-engine.js");
 require("../companion-persistence.js");
 require("../companion-engine.js");
+require("../companion-refinement.js");
 
 const b=new NpcBrain();
 
@@ -72,6 +73,29 @@ r=b.hear("Habla conmigo");
 assert.match(r,/podemos hablar|conversar|hablemos/i);
 assert.doesNotMatch(r,/no me dejes|solo me tienes|me necesitas/i);
 
+// Regresión del transcript real: preguntas sobre NIA no deben convertirse en temas.
+const topicCount=b.topicManager.topics.length;
+r=b.hear("cual es tu proposito");
+assert.strictEqual(b.topicManager.topics.length,topicCount,"una pregunta meta sobre NIA no debe contaminar la memoria temática");
+r=b.hear("y que te gustaria hacer");
+assert.match(r,/me gustaria|podemos|investigar|continuidad/i);
+assert.strictEqual(b.topicManager.topics.length,topicCount,"'y que te gustaria hacer' no debe convertirse en tema retomable");
+
+// Regresión del transcript real: una expresión explícita de soledad es un estado
+// transitorio y debe recibir una respuesta social, no una asociación semántica vieja.
+const beforeLonelyTopics=b.topicManager.topics.length;
+r=b.hear("creoq ue ahora me siento solo, que propones");
+assert.match(r,/hablando|te propongo|contarme|distraerte|hacer algo juntos/i);
+assert.doesNotMatch(r,/más contexto sobre gustaria hacer/i);
+assert.strictEqual(b.topicManager.topics.length,beforeLonelyTopics,"la soledad explícita no debe persistirse como tema");
+assert.strictEqual(b.companionState.lastUserAffect.kind,"loneliness");
+assert.strictEqual(b.companionState.lastUserAffect.persistent,false);
+
+// Una idea puramente interna como "Paso del tiempo" no merece iniciativa social.
+b.ideaEngine.current={focus:"Paso del tiempo",synthesis:{claim:"todavía no tengo una idea causal suficientemente apoyada"},recommendedTest:"observar qué cambia"};
+const internalCandidates=window.NpcIntInitiative.buildCandidates(b);
+assert.ok(!internalCandidates.some(x=>x.type==="share_idea"&&/paso del tiempo/i.test(x.topic||"")),"un tick interno no debe presentarse como idea social espontánea");
+
 for(let i=0;i<14;i++)b.hear(i%2===0?"Vale":"Gracias");
 assert.ok(["conocido","familiar","cercano"].includes(b.relationshipModel.stage));
 
@@ -82,15 +106,16 @@ window.NpcIntCompanion.ensure(b2);
 const remembered=window.NpcIntSocialMemory.profile(b2);
 assert.ok(remembered.likes.some(x=>/World of Warcraft/i.test(x.value)),"la preferencia debe sobrevivir una recarga local");
 assert.ok(remembered.projects.some(x=>/juego de tres carriles/i.test(x.value)),"el proyecto debe sobrevivir una recarga local");
+assert.ok(!b2.topicManager.topics.some(x=>/cual es tu proposito|que te gustaria hacer/i.test(x.label)),"restore debe limpiar temas meta de versiones anteriores");
 
 // Iniciativa: no debe hablar justo después del usuario, pero sí puede retomar
-// un pendiente cuando ha pasado suficiente tiempo y el contenido tiene valor.
-b.socialTiming.lastUserWallMs=Date.now()-120000;
-b.socialTiming.lastNpcWallMs=Date.now()-120000;
-b.socialTiming.lastInitiativeWallMs=Date.now()-120000;
+// un pendiente cuando ha pasado suficiente tiempo real y el contenido tiene valor.
+b.socialTiming.lastUserWallMs=Date.now()-300000;
+b.socialTiming.lastNpcWallMs=Date.now()-300000;
+b.socialTiming.lastInitiativeWallMs=Date.now()-300000;
 r=b.tick(2);
 assert.ok(r===null || /pendiente|juego de tres carriles|ocurrió|idea|retomar/i.test(r));
-assert.doesNotMatch(String(r||""),/sigues ahí|no quiero limitarme a esperar una orden/i);
+assert.doesNotMatch(String(r||""),/sigues ahí|no quiero limitarme a esperar una orden|Paso del tiempo/i);
 
 // Preferencias sensibles no se guardan en el perfil social persistente.
 const before=b.socialMemory.items.length;
