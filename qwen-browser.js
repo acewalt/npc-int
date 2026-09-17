@@ -2,16 +2,18 @@
 
 (function(){
   const state={
-    version:"1.0",
+    version:"1.1",
     supported:typeof navigator!=="undefined"&&!!navigator.gpu,
     ready:false,
     loading:false,
     generating:false,
     modelId:"onnx-community/Qwen3-0.6B-ONNX",
+    runtimeVersion:null,
     device:"webgpu",
     dtype:null,
     progress:0,
     progressFile:null,
+    lastInputTokens:null,
     lastError:null
   };
 
@@ -22,6 +24,13 @@
   let seq=1;
   const pending=new Map();
   const progressListeners=new Set();
+
+  function dropWorker(){
+    if(worker){
+      worker.terminate();
+      worker=null;
+    }
+  }
 
   function ensureWorker(){
     if(worker)return worker;
@@ -54,10 +63,17 @@
         state.dtype=msg.dtype||state.dtype;
         state.device=msg.device||state.device;
         state.modelId=msg.modelId||state.modelId;
+        state.runtimeVersion=msg.runtimeVersion||state.runtimeVersion;
         state.lastError=null;
         if(loadResolve)loadResolve(state);
         loadResolve=null;
         loadReject=null;
+        return;
+      }
+
+      if(msg.status==="generation-start"){
+        const n=Number(msg.inputTokens);
+        state.lastInputTokens=Number.isFinite(n)?n:null;
         return;
       }
 
@@ -80,13 +96,16 @@
           pending.delete(msg.requestId);
           state.generating=pending.size>0;
           job.reject(new Error(message));
-          return;
+        }else if(loadReject){
+          loadReject(new Error(message));
+          loadResolve=null;
+          loadReject=null;
         }
 
-        state.ready=false;
-        if(loadReject)loadReject(new Error(message));
-        loadResolve=null;
-        loadReject=null;
+        if(msg.fatal){
+          state.ready=false;
+          dropWorker();
+        }
       }
     });
 
@@ -101,6 +120,7 @@
       for(const [,job] of pending)job.reject(new Error(message));
       pending.clear();
       state.generating=false;
+      dropWorker();
     });
 
     return worker;
@@ -144,9 +164,9 @@
 
     const payload={
       messages:Array.isArray(messages)?messages:[],
-      maxNewTokens:Math.max(32,Math.min(512,Number(options.maxNewTokens)||220)),
+      maxNewTokens:Math.max(32,Math.min(384,Number(options.maxNewTokens)||180)),
       temperature:Math.max(0.05,Math.min(1.5,Number(options.temperature)||0.55)),
-      topK:Math.max(1,Math.min(100,Number(options.topK)||30))
+      topK:Math.max(1,Math.min(100,Number(options.topK)||20))
     };
 
     return new Promise((resolve,reject)=>{
@@ -161,10 +181,7 @@
 
   function reset(){
     if(loadReject)loadReject(new Error("Qwen fue reiniciado."));
-    if(worker){
-      worker.terminate();
-      worker=null;
-    }
+    dropWorker();
     for(const [,job] of pending)job.reject(new Error("Qwen fue reiniciado."));
     pending.clear();
     loadPromise=null;
@@ -176,6 +193,8 @@
     state.progress=0;
     state.progressFile=null;
     state.dtype=null;
+    state.runtimeVersion=null;
+    state.lastInputTokens=null;
     state.lastError=null;
   }
 
