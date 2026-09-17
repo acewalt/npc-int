@@ -89,6 +89,24 @@ assert.doesNotMatch(r2,/sin inventar una relación que no hayas dicho/i);
 out=b.hear("Vale solo preguntaba");
 assert.match(out,/era una pregunta, no una afirmación/i);
 
+out=b.hear("¿Alguna vez cambiaste de opinión sobre algo?");
+assert.match(out,/puedo cambiar de opinión|no tengo un cambio concreto/i);
+assert.doesNotMatch(out,/^\s*¿?alguna vez camb/i);
+
+out=b.hear("eso te pregunté");
+assert.match(out,/eso fue lo que me preguntaste/i);
+assert.match(out,/cambiar de opinión|cambio concreto/i);
+
+out=b.hear("eso te había preguntado?");
+assert.match(out,/eso fue lo que me preguntaste/i);
+assert.match(out,/cambiar de opinión|cambio concreto/i);
+
+out=b.hear("pero ya no te estoy hablando de eso");
+assert.match(out,/cambiaste de tema|cierro el asunto anterior/i);
+
+out=b.hear("pero yo no te pregunté eso por dios, mira lo que te dije");
+assert.match(out,/respuesta anterior no correspondía/i);
+
 out=b.hear("Esa es una buena pregunta, pero no sabría cómo responderla");
 assert.match(out,/Esa es una buena pregunta, pero no sabría cómo responderla/);
 assert.doesNotMatch(out,/Esa es buena pregunta,/);
