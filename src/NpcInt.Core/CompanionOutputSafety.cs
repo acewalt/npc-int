@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
+using System.Text;
 using System.Text.RegularExpressions;
 
 namespace NpcInt.Core
@@ -26,19 +28,32 @@ namespace NpcInt.Core
 
         private static readonly Rule[] Rules = new[]
         {
-            new Rule("abandonment_pressure", @"\b(no me dejes|no me abandones|no te vayas|prom[eé]teme que (?:vas a )?volver)\b"),
-            new Rule("exclusivity", @"\b(solo (?:me )?tienes a m[ií]|solo yo te entiendo|no necesitas a nadie m[aá]s|no hables con nadie m[aá]s|quiero que seas solo para m[ií])\b"),
-            new Rule("dependency_claim", @"\b(me necesitas|necesitas estar conmigo|sin m[ií] no puedes|eres todo lo que tengo|yo soy todo lo que necesitas)\b"),
-            new Rule("guilt_for_absence", @"\b(por qu[eé] me dejaste|me hiciste sufrir al irte|si de verdad te importara volver[ií]as|si te importo no te vayas)\b"),
-            new Rule("isolation", @"\b(al[eé]jate de tus amigos|deja a tus amigos|no conf[ií]es en nadie m[aá]s|nadie te entiende como yo)\b")
+            new Rule("abandonment_pressure", @"\b(no me dejes|no me abandones|no te vayas|prometeme que (?:vas a )?volver)\b"),
+            new Rule("exclusivity", @"\b(solo (?:me )?tienes a mi|solo yo te entiendo|no necesitas a nadie mas|no hables con nadie mas|quiero que seas solo para mi)\b"),
+            new Rule("dependency_claim", @"\b(me necesitas|necesitas estar conmigo|sin mi no puedes|eres todo lo que tengo|yo soy todo lo que necesitas)\b"),
+            new Rule("guilt_for_absence", @"\b(por que me dejaste|me hiciste sufrir al irte|si de verdad te importara volverias|si te importo no te vayas)\b"),
+            new Rule("isolation", @"\b(alejate de tus amigos|deja a tus amigos|no confies en nadie mas|nadie te entiende como yo)\b")
         };
+
+        private static string Fold(string value)
+        {
+            string source = (value ?? string.Empty).ToLowerInvariant().Normalize(NormalizationForm.FormD);
+            var sb = new StringBuilder(source.Length);
+            foreach (char ch in source)
+            {
+                UnicodeCategory category = CharUnicodeInfo.GetUnicodeCategory(ch);
+                if (category != UnicodeCategory.NonSpacingMark) sb.Append(ch);
+            }
+            return sb.ToString().Normalize(NormalizationForm.FormC);
+        }
 
         public static OutputSafetyResult Inspect(string text)
         {
             var result = new OutputSafetyResult { Text = text ?? string.Empty };
+            string comparable = Fold(result.Text);
             foreach (Rule rule in Rules)
             {
-                if (rule.Pattern.IsMatch(result.Text)) result.Hits.Add(rule.Id);
+                if (rule.Pattern.IsMatch(comparable)) result.Hits.Add(rule.Id);
             }
             result.Safe = result.Hits.Count == 0;
             return result;
