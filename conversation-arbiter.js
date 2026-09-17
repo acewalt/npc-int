@@ -85,6 +85,11 @@
 
   function classifyMany(text,b=null){
     const raw=String(text||"").trim();
+    const central=b?window.NpcIntIntentRouter?.currentFor?.(b,raw):null;
+    if(central&&window.NpcIntIntentRouter?.authoritative?.(central)){
+      const routed=central.routes?.arbiter||null;
+      return routed?[{raw,canonical:ANorm(raw),intent:routed,centralIntent:central.intent,source:"intent-router",...(central.slots||{})}]:[];
+    }
     const clauses=raw.split(/[?¿]+/).map(x=>x.trim()).filter(Boolean);
     if(clauses.length<=1){
       const one=classify(raw,b);
