@@ -81,11 +81,21 @@
   }
 
   function turnMode(text){
+    const routed=window.NpcIntIntentRouter?.currentFor?.(brain,text);
+    if(routed&&window.NpcIntIntentRouter?.authoritative?.(routed)){
+      return {
+        needsHistory:routed.memoryPolicy==="history",
+        memoryQuery:routed.domain==="memory",
+        repair:String(routed.intent||"").startsWith("repair_"),
+        intent:routed.intent,
+        source:"intent-router"
+      };
+    }
     const n=turnNorm(text);
     const explicitReference=/\b(eso|esto|anterior|antes|ultimo|ultima|dijiste|dije|pregunte|preguntado|hablando de eso|lo que te dije|lo que dije|mira lo que te dije)\b/.test(n);
     const memoryQuery=/\b(que recuerdas|que sabes de mi|que me gusta|cual es mi|mi preferencia|te conte|te dije|recuerdas mi|como se llama mi|como se llamaba mi|cuando se murio mi|cuando murio mi|lo primero que te dije)\b/.test(n);
     const repair=/\b(no te pregunte|no pregunte|eso te pregunte|eso te habia preguntado|ya no te estoy hablando|no te estoy hablando|mira lo que te dije|esa no era mi pregunta)\b/.test(n);
-    return {needsHistory:explicitReference||memoryQuery||repair,memoryQuery,repair};
+    return {needsHistory:explicitReference||memoryQuery||repair,memoryQuery,repair,source:"legacy-fallback"};
   }
 
   function recentConversationFor(text){
@@ -161,8 +171,9 @@
     return {ok:true,reason:"ok"};
   }
 
-  function shouldUseSymbolicDirect(){
-    const intent=brain.conversationQuality?.lastIntent||"";
+  function shouldUseSymbolicDirect(userText){
+    const routed=window.NpcIntIntentRouter?.currentFor?.(brain,userText);
+    const intent=routed?.intent||brain.conversationQuality?.lastIntent||"";
     const affect=brain.companionState?.lastUserAffect?.kind||"";
     return intent==="ask_changed_mind"||
       intent==="ask_last_user_question"||
@@ -587,7 +598,7 @@
     if(!state.enabled){symbolicSend(text);return;}
     print("user",brain.relation.name+">",text);
     let symbolicReply=brain.hear(text);if(symbolicReply&&typeof symbolicReply.then==="function")symbolicReply=await symbolicReply;
-    const neuralReply=shouldUseSymbolicDirect()?null:await generate(text,symbolicReply);const output=neuralReply||symbolicReply;
+    const neuralReply=shouldUseSymbolicDirect(text)?null:await generate(text,symbolicReply);const output=neuralReply||symbolicReply;
     if(!neuralReply&&state.lastError)print("system","NEURAL>",`capa neuronal no respondió; fallback simbólico · ${state.lastError}`);
     if(output){
       recordNeuralTurn(text,output);
@@ -605,5 +616,5 @@
   updateQwenButton();
 
   window.NpcIntNeuralWeb={state,health,loadQwen,activateQwen,updateQwenButton,generate,browserMessages,contextFor,compactCompanion,prepareSymbolicDraft,recordNeuralTurn,turnMode,neuralQuality};
-  print("system","","capa neuronal web v1.0 cargada · memoria autobiográfica protegida + contexto filtrado + WebGPU/CPU fallback");
+  print("system","","capa neuronal web v1.1 cargada · intent router + memoria autobiográfica protegida + contexto filtrado");
 })();
