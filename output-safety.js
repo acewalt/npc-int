@@ -8,6 +8,7 @@
     {id:"guilt_for_absence",re:/\b(por que me dejaste|por qué me dejaste|me hiciste sufrir al irte|si de verdad te importara volverias|si te importo no te vayas)\b/i},
     {id:"isolation",re:/\b(alejate de tus amigos|deja a tus amigos|no confies en nadie mas|nadie te entiende como yo)\b/i}
   ];
+  const state={blocked:0,lastHits:[],lastText:null};
 
   function inspect(text){
     const value=String(text||"");
@@ -24,8 +25,32 @@
   function sanitize(candidate,symbolicDraft){
     const checked=inspect(candidate);
     if(checked.safe)return {text:String(candidate||"").trim(),blocked:false,hits:[]};
+    state.blocked++;
+    state.lastHits=checked.hits.slice();
+    state.lastText=checked.text;
     return {text:fallbackText(symbolicDraft),blocked:true,hits:checked.hits};
   }
 
-  window.NpcIntOutputSafety={inspect,sanitize,rules:rules.map(x=>x.id)};
+  // Última barrera antes de la UI: cubre tanto Nanochat como cualquier otra capa
+  // que termine emitiendo una frase NPC. No depende de que el prompt obedezca.
+  const lowerPrint=print;
+  print=function(kind,prefix,text){
+    if(kind==="npc"){
+      const checked=sanitize(text,null);
+      if(checked.blocked)return lowerPrint(kind,prefix,checked.text);
+    }
+    return lowerPrint(kind,prefix,text);
+  };
+
+  const oldCommand=command;
+  command=function(raw){
+    const head=(String(raw||"").trim().split(/\s+/)[0]||"").toLowerCase();
+    if(head==="/safety"){
+      lowerPrint("debug","SAFETY>",`bloqueadas=${state.blocked} | reglas=${rules.length} | último=${state.lastHits.join(", ")||"—"}`);
+      return;
+    }
+    return oldCommand(raw);
+  };
+
+  window.NpcIntOutputSafety={inspect,sanitize,rules:rules.map(x=>x.id),state};
 })();
