@@ -21,6 +21,7 @@
   function classify(text){
     const n=QNorm(text),topic=opinionTopic(n);
     if(/^(?:que fue|cual fue) (?:lo )?ultimo que te pregunte$/.test(n) || /^(?:que|cual) fue mi ultima pregunta$/.test(n) || /^que te pregunte (?:antes|anteriormente)$/.test(n))return {intent:"ask_last_user_question",raw:text,canonical:n};
+    if(/\bno te pregunte eso\b/.test(n)&&/\bmira lo que te dije\b/.test(n))return {intent:"repair_wrong_answer",raw:text,canonical:n};
     if(/^(?:alguna vez )?(?:cambiaste|has cambiado) de opinion(?: sobre algo)?$/.test(n) || /^alguna vez has cambiado de parecer(?: sobre algo)?$/.test(n))return {intent:"ask_changed_mind",raw:text,canonical:n};
     if(/^(?:eso )?te (?:pregunte|habia preguntado)$/.test(n) || /^(?:eso )?era lo que te (?:pregunte|habia preguntado)$/.test(n))return {intent:"repair_repeat_question",raw:text,canonical:n};
     if(/^(?:pero )?(?:ya )?no te estoy hablando de eso$/.test(n) || /^(?:pero )?mira lo que te dije$/.test(n) || /^mira lo que te dije$/.test(n))return {intent:"repair_topic_drift",raw:text,canonical:n};
@@ -168,7 +169,7 @@
   }
 
   function repairAnswer(b,frame,ctx){
-    const previous=String(ctx.priorUser||"").trim();
+    const previous=previousSubstantiveUser(ctx) || String(ctx.priorUser||"").trim();
     if(previous){
       const previousFrame=classify(previous);
       if(previousFrame.intent&&previousFrame.intent!=="repair_wrong_answer"&&previousFrame.intent!=="repair_misread"){
