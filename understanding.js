@@ -80,7 +80,7 @@
 
   function isAnaphoricUnderstanding(n){
     return /^(?:me )?(?:entiendes|comprendes)$/.test(n)
-      || /^que (?:entendiste|comprendiste)$/.test(n)
+      || /^que (?:entiendes|comprendes|entendiste|comprendiste)$/.test(n)
       || /^(?:que )?(?:entiendes|entendiste|comprendes|comprendiste)(?: (?:de )?)?(?:esto|eso|lo anterior|lo que dije|lo que te dije|mi mensaje)$/.test(n)
       || /^(?:entiendes|comprendes) lo que (?:dije|te dije)$/.test(n);
   }
