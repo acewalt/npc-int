@@ -34,19 +34,27 @@
     return b.understanding?.lastFrame?.semantic||null;
   }
 
+  function currentQueryFrame(b,text){
+    const q=b.queryFrame?.current;
+    return q&&RNorm(q.input)===RNorm(text)?q:null;
+  }
+
   function frameFor(b,text){
     let d=null;
     try{d=window.NpcIntDialogueManager?.classify?.(text)||null;}catch(_){ }
     const u=b.understanding?.lastFrame;
     const semantic=currentSemantic(b,text);
+    const queryFrame=currentQueryFrame(b,text);
     const local=localIntent(text);
     const strongLocal=["continue_thread","request_clearer_speech","complaint_repetition"].includes(local)?local:null;
-    const intent=strongLocal || semantic?.intent || u?.intent || d?.intent || local || null;
+    const queryIntent=queryFrame?.intent&&queryFrame.intent!=="unresolved"?queryFrame.intent:null;
+    const intent=strongLocal || queryIntent || semantic?.intent || u?.intent || d?.intent || local || null;
     return {
       intent,
-      canonical:u?.canonical || d?.canonical || RNorm(text),
-      source:strongLocal?"pragmatic-local":semantic?.intent?"semantic-nlp":u?.source||d?.intent?"dialogue-fallback":local?"local-structure":"dialogue-fallback",
-      repetition:intent&&b.dialogueManager?.lastIntent===intent ? Math.max(1,b.dialogueManager?.sameIntentCount||1) : 1
+      canonical:queryFrame?.canonical || u?.canonical || d?.canonical || RNorm(text),
+      source:strongLocal?"pragmatic-local":queryIntent?"query-frame":semantic?.intent?"semantic-nlp":u?.source||d?.intent?"dialogue-fallback":local?"local-structure":"dialogue-fallback",
+      repetition:intent&&b.dialogueManager?.lastIntent===intent ? Math.max(1,b.dialogueManager?.sameIntentCount||1) : 1,
+      queryFrame
     };
   }
 
@@ -54,8 +62,9 @@
     try{
       const api=window.NpcIntCognitiveState;
       const semantic=currentSemantic(b,text);
-      const intent=semantic?.intent||b.understanding?.lastFrame?.intent||b.dialogueManager?.lastIntent||null;
-      if(api?.refresh)return api.refresh(b,text,{intent,semantic});
+      const q=currentQueryFrame(b,text);
+      const intent=q?.intent||semantic?.intent||b.understanding?.lastFrame?.intent||b.dialogueManager?.lastIntent||null;
+      if(api?.refresh)return api.refresh(b,text,{intent,semantic,queryFrame:q});
     }catch(_){ }
     return b.cognitiveState?.current||null;
   }
@@ -121,6 +130,10 @@
       input:text,
       intent:frame.intent,
       intentSource:frame.source,
+      queryFrameId:frame.queryFrame?.id||null,
+      references:(frame.queryFrame?.references||[]).map(x=>({id:x.id,kind:x.kind,mention:x.mention,target:x.target,confidence:x.confidence})),
+      evidenceRequest:frame.queryFrame?.evidenceRequest?{stores:frame.queryFrame.evidenceRequest.stores.slice(),reason:frame.queryFrame.evidenceRequest.reason}:null,
+      evidence:(frame.queryFrame?.candidateEvidence||[]).slice(0,8).map(x=>({store:x.store,kind:x.kind,score:x.score,source:x.source,proposition:x.proposition||null})),
       act:"passthrough",
       content:{topic,action,goal,thoughtTopic,thoughtAction,thoughtGoal,thoughtUnknown},
       uncertainty:state?.unresolved?.slice?.(0,3)||[],
@@ -304,9 +317,9 @@
     s.history.push(p);
     if(s.history.length>30)s.history.shift();
     if(b.cognitiveState?.current)b.cognitiveState.current.responsePlan={
-      act:p.act,content:p.content,uncertainty:p.uncertainty,detail:p.detail,justify:p.justify
+      act:p.act,content:p.content,uncertainty:p.uncertainty,detail:p.detail,justify:p.justify,queryFrameId:p.queryFrameId
     };
-    if(Array.isArray(b.lastThoughts))b.lastThoughts.push(`PLAN DE RESPUESTA: acto=${p.act}; fuente=${p.intentSource||"—"}; detalle=${p.detail}; métricas=${p.exposeMetrics?"sí":"no"}`);
+    if(Array.isArray(b.lastThoughts))b.lastThoughts.push(`PLAN DE RESPUESTA: acto=${p.act}; fuente=${p.intentSource||"—"}; frame=${p.queryFrameId||"—"}; detalle=${p.detail}; métricas=${p.exposeMetrics?"sí":"no"}`);
   }
 
   function formatPlan(p){
@@ -314,6 +327,7 @@
     return [
       `intención=${p.intent||"—"}`,
       `fuente intención=${p.intentSource||"—"}`,
+      `query frame=${p.queryFrameId||"—"}`,
       `acto comunicativo=${p.act}`,
       `tema=${p.content.topic||"—"}`,
       `acción=${p.content.action||"—"}`,
@@ -323,6 +337,9 @@
       `seguimiento=${p.followUp?"sí":"no"}`,
       `mostrar métricas=${p.exposeMetrics?"sí":"no"}`,
       `repetición=${p.repetition}`,
+      `referencias=${p.references?.length?p.references.map(x=>`${x.kind}→${x.target?.text||"?"}`).join(" | "):"—"}`,
+      `evidencia solicitada=${p.evidenceRequest?.stores?.join(" → ")||"—"}`,
+      `candidatos evidencia=${p.evidence?.length||0}`,
       `dudas=${p.uncertainty.join(" | ")||"—"}`,
       `\nSALIDA\n${p.text||"(silencio)"}`
     ].join("\n");
@@ -331,9 +348,9 @@
   const oldReset=NpcBrain.prototype.reset;
   NpcBrain.prototype.reset=function(){oldReset.call(this);this.responsePlanner=null;ensurePlanner(this);};
 
-  // Árbitro final del lenguaje simbólico. La intención semántica NLP tiene
-  // precedencia; los actos pragmáticos locales evitan degradar continuidad,
-  // correcciones del usuario y afirmaciones breves a un fallback genérico.
+  // Árbitro final del lenguaje simbólico. QueryFrame reúne interpretación,
+  // conceptos y referencias; la semántica NLP y los actos pragmáticos locales
+  // siguen disponibles como fallback y para reparaciones de diálogo.
   const oldHear=NpcBrain.prototype.hear;
   NpcBrain.prototype.hear=function(text){
     const planner=ensurePlanner(this);
@@ -383,5 +400,5 @@
 
   ensurePlanner(brain);
   window.NpcIntResponsePlanner={buildPlan,verbalize,formatPlan};
-  print("system","","planificador de respuesta v0.4 cargado · pragmática contextual + reparación + introspección · salida natural");
+  print("system","","planificador de respuesta v0.5 cargado · QueryFrame + pragmática contextual + salida natural");
 })();
