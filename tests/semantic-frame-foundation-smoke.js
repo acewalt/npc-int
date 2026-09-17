@@ -49,7 +49,10 @@ require("../brain-pipeline.js");
 require("../concept-registry.js");
 require("../reference-resolver.js");
 require("../query-frame.js");
+require("../semantic-frame-bridge.js");
 require("../response-planner.js");
+
+assert.deepEqual(global.NpcIntPipeline.state.stages.hear.map(x=>x.name),[],"ReferenceResolver y QueryFrame no deben contaminar el pipeline mental");
 
 const registry=global.NpcIntConceptRegistry;
 const cat=registry.resolve("gatos");
