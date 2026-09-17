@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://acewalt.github.io/npc-int/contracts/query-frame.v1.schema.json",
+  "title": "NPC-INT Query/Thought Frame v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "version", "input", "canonical", "intent", "speechAct", "references", "evidenceRequest", "candidateEvidence", "reasoning", "parser"],
+  "properties": {
+    "id": {"type": "string", "pattern": "^qf:[0-9]+$"},
+    "version": {"const": 1},
+    "time": {"type": "number"},
+    "input": {"type": "string"},
+    "canonical": {"type": "string"},
+    "intent": {"type": "string", "minLength": 1},
+    "speechAct": {"type": "string", "minLength": 1},
+    "subject": {"$ref": "#/$defs/entityRef"},
+    "predicate": {"type": ["string", "null"]},
+    "object": {"$ref": "#/$defs/entityRef"},
+    "question": {"type": ["string", "null"]},
+    "topic": {"type": ["string", "null"]},
+    "entities": {"type": "array", "items": {"type": "object"}},
+    "references": {"type": "array", "items": {"$ref": "#/$defs/reference"}},
+    "evidenceRequest": {"$ref": "#/$defs/evidenceRequest"},
+    "candidateEvidence": {"type": "array", "items": {"$ref": "#/$defs/evidence"}},
+    "reasoning": {"type": "array", "items": {"type": "string"}},
+    "parser": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "confidence"],
+      "properties": {
+        "source": {"type": "string"},
+        "confidence": {"type": ["number", "null"], "minimum": 0, "maximum": 1}
+      }
+    }
+  },
+  "$defs": {
+    "entityRef": {
+      "type": ["object", "null"],
+      "properties": {
+        "kind": {"type": "string"},
+        "id": {"type": "string"},
+        "label": {"type": "string"},
+        "type": {"type": "string"},
+        "language": {"type": "string"}
+      },
+      "required": ["kind", "id", "label"]
+    },
+    "reference": {
+      "type": "object",
+      "required": ["id", "kind", "mention", "target", "confidence"],
+      "properties": {
+        "id": {"type": "string"},
+        "kind": {"type": "string"},
+        "mention": {"type": "string"},
+        "target": {"type": "object"},
+        "confidence": {"type": "number", "minimum": 0, "maximum": 1}
+      }
+    },
+    "evidenceRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stores", "reason"],
+      "properties": {
+        "stores": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "reason": {"type": "string"}
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "required": ["store", "kind", "source", "relevance", "confidence", "sourceTrust", "personalRelevance", "recency", "score"],
+      "properties": {
+        "store": {"type": "string"},
+        "kind": {"type": "string"},
+        "proposition": {"type": ["object", "null"]},
+        "text": {"type": "string"},
+        "source": {"type": "object"},
+        "rawWeight": {"type": ["number", "null"]},
+        "relevance": {"type": "number", "minimum": 0, "maximum": 1},
+        "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+        "sourceTrust": {"type": "number", "minimum": 0, "maximum": 1},
+        "personalRelevance": {"type": "number", "minimum": 0, "maximum": 1},
+        "recency": {"type": "number", "minimum": 0, "maximum": 1},
+        "score": {"type": "number", "minimum": 0, "maximum": 1}
+      }
+    }
+  }
+}
