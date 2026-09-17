@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://npc-int.local/contracts/npc-turn.v1.schema.json",
+  "title": "npc-int turn envelope v1",
+  "type": "object",
+  "required": ["contractVersion", "stimulus", "decision", "action"],
+  "properties": {
+    "contractVersion": {"const": "npc-int.turn.v1"},
+    "turnId": {"type": "string"},
+    "stimulus": {
+      "type": "object",
+      "required": ["type", "source", "text"],
+      "properties": {
+        "type": {"type": "string"},
+        "source": {"type": "string"},
+        "text": {"type": "string"},
+        "importance": {"type": "number", "minimum": 0, "maximum": 1},
+        "threat": {"type": "number", "minimum": 0, "maximum": 1}
+      },
+      "additionalProperties": false
+    },
+    "decision": {
+      "type": "object",
+      "required": ["kind", "label", "utility"],
+      "properties": {
+        "kind": {"type": "string"},
+        "label": {"type": "string"},
+        "utility": {"type": "number", "minimum": 0, "maximum": 1},
+        "risk": {"type": "number", "minimum": 0, "maximum": 1},
+        "consequences": {"type": "array", "items": {"type": "string"}},
+        "conflicts": {"type": "array", "items": {"type": "string"}}
+      },
+      "additionalProperties": false
+    },
+    "action": {
+      "type": "object",
+      "required": ["kind", "reason", "utterance"],
+      "properties": {
+        "kind": {"type": "string"},
+        "reason": {"type": "string"},
+        "utterance": {"type": "string"},
+        "utility": {"type": "number", "minimum": 0, "maximum": 1}
+      },
+      "additionalProperties": false
+    },
+    "idea": {
+      "type": ["object", "null"],
+      "properties": {
+        "focus": {"type": "string"},
+        "claim": {"type": "string"},
+        "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+        "critique": {"type": "string"},
+        "recommendedTest": {"type": "string"},
+        "recommendedAction": {"type": "string"}
+      },
+      "additionalProperties": false
+    },
+    "companion": {
+      "type": ["object", "null"],
+      "properties": {
+        "relationshipStage": {"type": "string"},
+        "familiarity": {"type": "number", "minimum": 0, "maximum": 1},
+        "trust": {"type": "number", "minimum": 0, "maximum": 1},
+        "activeTopic": {"type": ["string", "null"]},
+        "openPendingCount": {"type": "integer", "minimum": 0}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
