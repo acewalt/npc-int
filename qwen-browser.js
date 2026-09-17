@@ -160,6 +160,7 @@
   }
 
   function reset(){
+    if(loadReject)loadReject(new Error("Qwen fue reiniciado."));
     if(worker){
       worker.terminate();
       worker=null;
