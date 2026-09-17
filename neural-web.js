@@ -61,7 +61,9 @@
     }
     state.enabled=true;
     updateQwenButton();
-    const ok=await loadQwen(false);
+    const pending=loadQwen(false);
+    updateQwenButton();
+    const ok=await pending;
     if(!ok)state.enabled=false;
     updateQwenButton();
     return ok;
@@ -361,9 +363,8 @@
         print("system","NEURAL>","modo neuronal activado · backend=bridge local");
         health(false);
       }else{
-        state.mode="qwen";
         print("system","NEURAL>","modo neuronal activado · backend=Qwen3-0.6B WebGPU");
-        loadQwen(false);
+        activateQwen();
       }
       return;
     }
@@ -444,6 +445,13 @@
     if(output)window.setTimeout(()=>print("npc",brain.identity.name+">",output),120);
   };
 
-  window.NpcIntNeuralWeb={state,health,loadQwen,generate,browserMessages,contextFor,compactCompanion};
-  print("system","","capa neuronal web v0.6 cargada · Qwen3-0.6B WebGPU + bridge local · /neural qwen");
+  qwenButton?.addEventListener("click",event=>{
+    event.preventDefault();
+    event.stopPropagation();
+    activateQwen();
+  });
+  updateQwenButton();
+
+  window.NpcIntNeuralWeb={state,health,loadQwen,activateQwen,updateQwenButton,generate,browserMessages,contextFor,compactCompanion};
+  print("system","","capa neuronal web v0.7 cargada · Qwen3-0.6B WebGPU + bridge local · botón Qwen disponible");
 })();
