@@ -56,6 +56,40 @@
   function hasAll(tokens,...xs){return xs.every(x=>tokens.includes(x));}
   function hasAny(tokens,...xs){return xs.some(x=>tokens.includes(x));}
 
+  function conceptUnderstandingTopic(n){
+    const m=n.match(/^que (?:entiendes|comprendes)(?: tu| usted)? (?:como|por|sobre|de) (.+)$/);
+    if(!m)return null;
+    const topic=m[1].trim();
+    if(/^(?:esto|eso|lo anterior|lo que dije|lo que te dije|mi mensaje)$/.test(topic))return null;
+    return topic||null;
+  }
+
+  function selfRelativeTopic(n){
+    const m=n.match(/^que (?:es|significa) (.+?) para (?:ti|vos)$/);
+    return m?m[1].trim():null;
+  }
+
+  function preferenceTopic(n){
+    let m=n.match(/^que (.+?) te gusta(?:n)?(?: mas)?$/);
+    if(m&&m[1]!=="te")return m[1].trim();
+    m=n.match(/^que te gusta (?:de|sobre) (.+)$/);
+    if(m)return m[1].trim();
+    m=n.match(/^(?:a ti )?te gusta(?:n)? (.+)$/);
+    return m?m[1].trim():null;
+  }
+
+  function isAnaphoricUnderstanding(n){
+    return /^(?:me )?(?:entiendes|comprendes)$/.test(n)
+      || /^que (?:entendiste|comprendiste)$/.test(n)
+      || /^(?:que )?(?:entiendes|entendiste|comprendes|comprendiste)(?: (?:de )?)?(?:esto|eso|lo anterior|lo que dije|lo que te dije|mi mensaje)$/.test(n)
+      || /^(?:entiendes|comprendes) lo que (?:dije|te dije)$/.test(n);
+  }
+
+  function isInternetAccessQuestion(n){
+    return /^(?:tu )?(?:tienes|tenes) acceso (?:a )?(?:internet|la red)$/.test(n)
+      || /^puedes (?:usar|consultar|acceder a) (?:internet|la red)$/.test(n);
+  }
+
   function semanticFor(text,b){
     try{
       if(!b?.nlp?.lastAnalysis || b.nlp.lastText!==text)return null;
@@ -68,7 +102,18 @@
     const n=c.text;
     const t=n.split(" ").filter(Boolean);
     const semantic=semanticFor(text,b);
-    let intent=semantic?.intent||null;
+    const conceptTopic=conceptUnderstandingTopic(n);
+    const selfTopic=selfRelativeTopic(n);
+    const prefTopic=preferenceTopic(n);
+    let intent=null,source="heuristic-fallback",confidence=null;
+
+    // Las preguntas autocontenidas tienen prioridad sobre referencias al turno
+    // anterior. Esto evita usar lastInterpretation/currentTopic como comodín cuando
+    // el propio mensaje ya trae un objeto explícito: conciencia, color, etc.
+    if(conceptTopic){intent="ask_concept_understanding";source="explicit-topic-rule";confidence=.99;}
+    else if(selfTopic){intent="ask_self_concept";source="explicit-topic-rule";confidence=.99;}
+    else if(isInternetAccessQuestion(n)){intent="ask_internet_access";source="explicit-capability-rule";confidence=.99;}
+    else if(semantic?.intent){intent=semantic.intent;source=semantic.source||"semantic-nlp";confidence=semantic.confidence;}
 
     // Fallback rules remain useful when the neural NLP bridge is disabled or
     // when its semantic projection has low coverage. They are deliberately
@@ -76,7 +121,7 @@
     if(!intent){
       if(/^(mm+|hm+|hmm+|uhm+|aja|ajá)$/.test(UNorm(text).replace(/[¿?¡!]/g,""))) intent="backchannel";
       else if((hasAny(t,"inteligencia","capacidad")&&hasAny(t,"tienes","tiene","eres")) || /que sabes hacer/.test(n)) intent="ask_capabilities";
-      else if((hasAny(t,"entiendes","entendiste","comprendes","comprendiste")&&hasAny(t,"que","esto","eso")) || /^que entend/.test(n)) intent="ask_understanding";
+      else if(isAnaphoricUnderstanding(n)) intent="ask_understanding";
       else if(hasAny(t,"registraste","registro")&&hasAny(t,"que","cual")) intent="ask_registered";
       else if(hasAll(t,"tienes","cuenta")&&hasAny(t,"que","cual")) intent="ask_considering";
       else if((hasAny(t,"piensas","pensando")&&hasAny(t,"que","en")) || (hasAll(t,"tienes","mente")&&hasAny(t,"que","en"))) intent="ask_current_thought";
@@ -91,9 +136,8 @@
 
     return {
       raw:text,canonical:n,tokens:t,intent,repaired:c.repaired,
-      semantic,
-      source:semantic?.intent?semantic.source||"semantic-nlp":"heuristic-fallback",
-      confidence:semantic?.intent?semantic.confidence:null
+      topic:conceptTopic||selfTopic||prefTopic||semantic?.topic||null,
+      semantic,source,confidence
     };
   }
 
@@ -118,11 +162,44 @@
     return b.pragmatics?.meaningfulTopic || b.dialogue?.topic || b.discourse?.lastRegistered?.source || previousRelevantUser(b) || "el contexto actual";
   }
 
+  function conceptualUnderstandingAnswer(topic){
+    const key=UNorm(topic).replace(/[¿?¡!]/g,"");
+    if(/^(?:la )?conciencia$/.test(key)){
+      return "Por «conciencia» entiendo la capacidad de integrar lo que se percibe, mantener continuidad mediante memoria, representar un estado propio y usar todo eso para orientar decisiones. En mi caso puedo simular varias de esas funciones, pero eso no demuestra que tenga experiencia subjetiva; por eso no afirmo ser consciente en el sentido humano.";
+    }
+    const local=globalThis.npcKnowledge?.localAnswer?.(`qué es ${topic}`);
+    if(local?.text)return `Por «${topic}» entiendo, de forma provisional: ${local.text} Puedo usar esa definición como base y revisarla si aparece información mejor.`;
+    return `Por «${topic}» entiendo un concepto nuevo de la conversación, no una referencia automática al turno anterior. No tengo una definición suficientemente sólida cargada como para fingir una; puedo construirla a partir de hechos, ejemplos o argumentos sobre ese tema.`;
+  }
+
+  function selfConceptAnswer(topic){
+    const key=UNorm(topic).replace(/[¿?¡!]/g,"");
+    if(/^(?:lo )?real$|^realidad$/.test(key)){
+      return "Para mí, «real» es aquello que debo tratar como parte del estado del mundo porque llega como una percepción o evento del sistema, o porque está guardado como un hecho suficientemente confiable. Lo separo de recuerdos, hipótesis e inferencias: que yo piense algo o lo recuerde no basta para convertirlo en un hecho del entorno.";
+    }
+    return `Para mí, «${topic}» no sería una sensación humana privada por defecto. Lo trato como un concepto operativo: intento relacionarlo con lo que percibo, recuerdo y puedo justificar, distinguiendo hechos de hipótesis.`;
+  }
+
+  function internetAccessAnswer(){
+    const wiki=typeof globalThis.npcKnowledge?.wikipediaAnswer==="function";
+    if(wiki)return "Tengo acceso de red limitado desde esta Page: puedo consultar Wikipedia online cuando hay conexión. No tengo un navegador general ni acceso libre a cualquier sitio; el resto de mis respuestas sale de mi estado, memoria y conocimiento local salvo que se conecte otra herramienta explícitamente.";
+    return "En esta ejecución no tengo una vía de red configurada. Puedo trabajar con mi memoria, estado y conocimiento local, pero no debería afirmar que puedo navegar por Internet.";
+  }
+
   function answerFrame(b,f){
     const d=b.discourse||{};
     switch(f.intent){
       case "ask_capabilities":
         return "Mi inteligencia actual es híbrida. Mantengo contexto, memoria episódica, hechos y relaciones, conocimiento externo, estado mental, objetivos y decisiones. Cuando el NLP local está activo también puedo usar análisis contextual de lemas, morfología, dependencias y entidades; Nanochat puede encargarse de interpretación adicional y redacción neuronal.";
+
+      case "ask_internet_access":
+        return internetAccessAnswer();
+
+      case "ask_concept_understanding":
+        return conceptualUnderstandingAnswer(f.topic||"ese concepto");
+
+      case "ask_self_concept":
+        return selfConceptAnswer(f.topic||"ese concepto");
 
       case "ask_understanding": {
         const x=d.lastInterpretation;
@@ -183,7 +260,8 @@
         return "No tengo orientación sexual: soy un NPC y no tengo cuerpo, sexualidad ni experiencias personales humanas. Puedo representar esos rasgos si el diseño de un personaje los define.";
 
       case "ask_preference": {
-        const topic=currentTopic(b);
+        const topic=f.topic||currentTopic(b);
+        if(f.topic)return `Si hablamos de «${topic}», no tengo una preferencia humana fija precargada. Puedo desarrollar preferencias funcionales a partir de experiencias, recuerdos, recompensas y personalidad; eso es distinto de fingir un gusto solo porque me lo preguntaste.`;
         return `No tengo gustos humanos estables por defecto. Si te refieres a «${topic}», puedo evaluar si encaja con mis objetivos, recuerdos o personalidad, que es distinto de sentir gusto como una persona.`;
       }
 
@@ -267,6 +345,7 @@
       `original: ${f.raw}`,
       `canónico: ${f.canonical}`,
       `intención: ${f.intent||"no resuelta"}`,
+      `tema explícito: ${f.topic||"—"}`,
       `fuente: ${f.source||"—"}`,
       `confianza: ${f.confidence==null?"—":Math.round(f.confidence*100)+"%"}`,
       `reparaciones: ${f.repaired.length?f.repaired.join(", "):"—"}`,
@@ -283,6 +362,6 @@
   };
 
   ensureUnderstanding(brain);
-  window.NpcIntUnderstanding={canonical,classify};
-  print("system","","comprensión v1.1 cargada · NLP semántico primero · introspección + fallback tipográfico");
+  window.NpcIntUnderstanding={canonical,classify,conceptUnderstandingTopic,selfRelativeTopic,preferenceTopic};
+  print("system","","comprensión v1.2 cargada · tema explícito antes de anáfora · NLP semántico + introspección");
 })();
