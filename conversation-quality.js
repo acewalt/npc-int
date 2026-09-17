@@ -9,7 +9,7 @@
 
   function ensure(b){
     if(b.conversationQuality)return b.conversationQuality;
-    b.conversationQuality={version:2,turns:0,variation:0,lastIntent:null,lastRepair:null,lastReply:null};
+    b.conversationQuality={version:3,turns:0,variation:0,lastIntent:null,lastRepair:null,lastReply:null,lastUserInput:null,userHistory:[]};
     return b.conversationQuality;
   }
 
@@ -20,6 +20,7 @@
 
   function classify(text){
     const n=QNorm(text),topic=opinionTopic(n);
+    if(/^(?:que fue|cual fue) (?:lo )?ultimo que te pregunte$/.test(n) || /^(?:que|cual) fue mi ultima pregunta$/.test(n) || /^que te pregunte (?:antes|anteriormente)$/.test(n))return {intent:"ask_last_user_question",raw:text,canonical:n};
     if(/^(?:pero )?(?:eso )?no (?:fue |era )?(?:lo )?que (?:te )?pregunte$/.test(n) || /^(?:pero )?no (?:te )?pregunte eso$/.test(n) || /^(?:pero )?yo no pregunte eso$/.test(n) || /^esa no era mi pregunta$/.test(n))return {intent:"repair_wrong_answer",raw:text,canonical:n};
     if(/^(?:pero )?no (?:dije|quise decir) eso$/.test(n))return {intent:"repair_misread",raw:text,canonical:n};
     if(/^(?:y )?te gustaria (?:conocer|hablar con) (?:a )?(?:alguien|otra persona|alguien mas|otra gente)(?: mas)?$/.test(n) || /^(?:y )?quisieras conocer a alguien mas$/.test(n))return {intent:"ask_social_expansion",raw:text,canonical:n};
@@ -99,8 +100,27 @@
     return out;
   }
 
+  function isQuestionLike(text){
+    const raw=String(text||"").trim(),n=QNorm(raw);
+    return /[?¿]/.test(raw)||/^(que|como|cuando|donde|por que|porque|cual|cuales|quien|quienes|cuanto|cuanta|cuantos|cuantas)\b/.test(n);
+  }
+
+  function lastUserQuestion(ctx={}){
+    const history=Array.isArray(ctx.userHistory)?ctx.userHistory:[];
+    for(let i=history.length-1;i>=0;i--){
+      const item=String(history[i]||"").trim();
+      if(item&&isQuestionLike(item)&&classify(item).intent!=="ask_last_user_question")return item;
+    }
+    const prior=String(ctx.priorUser||"").trim();
+    return isQuestionLike(prior)?prior:null;
+  }
+
   function answerKnown(b,frame,ctx={}){
     switch(frame.intent){
+      case "ask_last_user_question":{
+        const previous=lastUserQuestion(ctx);
+        return previous?`La última pregunta que me hiciste fue: «${clip(previous,140)}».`:"No encuentro una pregunta anterior tuya en el historial de esta sesión.";
+      }
       case "ask_social_expansion":return socialExpansionAnswer();
       case "ask_food_preference":return foodAnswer(b);
       case "ask_decision_process":return decisionAnswer();
@@ -172,8 +192,11 @@
   const oldHear=NpcBrain.prototype.hear;
   NpcBrain.prototype.hear=function(text){
     const quality=ensure(this),raw=String(text||"").trim(),frame=classify(raw);
+    const priorLiteral=quality.lastUserInput || this.dialogue?.lastUser || this.companionState?.lastUserText || this.discourse?.currentUser || "";
+    const priorHistory=Array.isArray(quality.userHistory)?quality.userHistory.slice(-12):[];
     const ctx={
-      priorUser:this.dialogue?.lastUser || this.companionState?.lastUserText || this.discourse?.currentUser || "",
+      priorUser:priorLiteral,
+      userHistory:priorHistory,
       priorNpc:this.dialogue?.lastNpc || this.companionState?.lastReply || this.discourse?.previousNpc || "",
       priorPragmaticTopic:this.pragmatics?.meaningfulTopic || null,
       priorDialogueTopic:this.dialogue?.topic || null
@@ -198,6 +221,9 @@
       const finalText=refine(this,frame,lowerReply,ctx);
       quality.turns++;
       quality.lastIntent=frame.intent||"pass_through";
+      quality.lastUserInput=raw;
+      quality.userHistory.push(raw);
+      if(quality.userHistory.length>24)quality.userHistory.splice(0,quality.userHistory.length-24);
       quality.lastReply=finalText||null;
       if(frame.intent&&Array.isArray(this.lastThoughts))this.lastThoughts.push(`CALIDAD CONVERSACIONAL: intención=${frame.intent}; reparación=${frame.intent.startsWith("repair_")?"sí":"no"}`);
       if(frame.intent?.startsWith("repair_"))quality.lastRepair={input:raw,previousUser:ctx.priorUser,previousNpc:ctx.priorNpc,time:this.time||0};
@@ -209,10 +235,10 @@
   };
 
   window.NpcIntConversationQuality={
-    classify,refine,isInternalFocus,
+    classify,refine,isInternalFocus,lastUserQuestion,
     config:{knowledgeMatching:"native:knowledge.js"}
   };
 
   ensure(brain);
-  print("system","","calidad conversacional v1.1 cargada · reparación de respuestas + filtros de foco interno");
+  print("system","","calidad conversacional v1.2 cargada · historial literal de preguntas + reparación de respuestas + filtros de foco interno");
 })();

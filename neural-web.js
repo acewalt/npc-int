@@ -1,7 +1,7 @@
 "use strict";
 
 (function(){
-  const state={enabled:false,mode:"qwen",endpoint:"http://127.0.0.1:8765",ready:false,bridgeReady:false,backend:null,model:null,checking:false,lastError:null};
+  const state={enabled:false,mode:"qwen",endpoint:"http://127.0.0.1:8765",ready:false,bridgeReady:false,backend:null,model:null,checking:false,lastError:null,turns:[]};
   const qwenButton=document.getElementById("qwenToggle");
   const qwenButtonLabel=document.getElementById("qwenToggleLabel");
 
@@ -67,6 +67,40 @@
     if(!ok)state.enabled=false;
     updateQwenButton();
     return ok;
+  }
+
+  const turnStop=new Set(["que","como","cuando","donde","porque","por","para","con","una","uno","unos","unas","los","las","del","esto","eso","esta","este","fue","son","soy","eres","estoy","me","te","se","lo","la","el","un","y","o","de","a","en","mi","tu"]);
+  const turnNorm=s=>String(s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9ñ ]+/g," ").replace(/\s+/g," ").trim();
+  const turnTokens=s=>new Set(turnNorm(s).split(" ").filter(x=>x.length>2&&!turnStop.has(x)));
+
+  function tokenOverlap(a,b){
+    const aa=turnTokens(a),bb=turnTokens(b);
+    if(!aa.size||!bb.size)return 0;
+    let hit=0;aa.forEach(x=>bb.has(x)&&hit++);
+    return hit/Math.min(aa.size,bb.size);
+  }
+
+  function lastNeuralNpc(){
+    for(let i=state.turns.length-1;i>=0;i--)if(state.turns[i]?.role==="assistant")return String(state.turns[i].content||"");
+    return "";
+  }
+
+  function prepareSymbolicDraft(userText,symbolicDraft){
+    const draft=String(symbolicDraft||"").trim();
+    if(!draft)return {text:"",trusted:false,reason:"empty"};
+    const previous=lastNeuralNpc();
+    if(previous&&turnNorm(previous)===turnNorm(draft))return {text:"",trusted:false,reason:"repeats_previous_npc"};
+    const n=turnNorm(userText);
+    const repair=/\b(no te pregunte eso|no pregunte eso|esa no era mi pregunta|que fue lo ultimo que te pregunte|cual fue mi ultima pregunta)\b/.test(n);
+    const question=/[?¿]/.test(userText)||/^(que|como|cuando|donde|por que|porque|cual|cuales|quien|quienes|cuanto|cuanta|cuantos|cuantas)\b/.test(n);
+    const overlap=tokenOverlap(userText,draft);
+    if(question&&!repair&&overlap<.08)return {text:"",trusted:false,reason:"question_draft_mismatch"};
+    return {text:draft,trusted:true,reason:"aligned"};
+  }
+
+  function recordNeuralTurn(userText,npcText){
+    state.turns.push({role:"user",content:String(userText||"").trim()},{role:"assistant",content:String(npcText||"").trim()});
+    if(state.turns.length>16)state.turns.splice(0,state.turns.length-16);
   }
 
   function compactMemory(){return (brain.mem||[]).slice(-10).map(m=>({type:m.type,text:m.text,salience:m.salience,time:m.time}));}
@@ -157,6 +191,7 @@
       ideaState:compactIdea(),
       responsePlan:compactResponsePlan(),
       discourse:brain.discourse?{previousUser:brain.discourse.previousUser,previousNpc:brain.discourse.previousNpc,lastInterpretation:brain.discourse.lastInterpretation,lastCommitment:brain.discourse.lastCommitment,lastRegistered:brain.discourse.lastRegistered}:null,
+      recentConversation:state.turns.slice(-8),
       memory:compactMemory(),
       symbolicDraft:symbolicDraft||""
     };
@@ -234,36 +269,44 @@
   }
 
   function browserMessages(userText,symbolicDraft){
-    const c=contextFor(userText,symbolicDraft);
+    const draft=prepareSymbolicDraft(userText,symbolicDraft);
+    const c=contextFor(userText,draft.text);
+    const companion=c.companion?{...c.companion,companionPlan:draft.trusted?c.companion.companionPlan:null,initiative:null}:null;
     const compact={
       identity:c.identity,
-      input:c.input,
+      currentInput:c.input,
+      recentConversation:c.recentConversation,
       relation:c.relation,
-      companion:c.companion,
+      companion,
       nlp:c.nlp?.semantic?{semantic:c.nlp.semantic}:null,
       mind:c.mind,
       cognitiveState:c.cognitiveState,
       ideaState:c.ideaState,
-      responsePlan:c.responsePlan,
-      memory:(c.memory||[]).slice(-6),
-      symbolicDraft:c.symbolicDraft
+      responsePlan:draft.trusted?c.responsePlan:null,
+      memory:(c.memory||[]).slice(-8),
+      symbolicDraft:draft.text,
+      symbolicDraftTrusted:draft.trusted,
+      symbolicDraftReason:draft.reason
     };
 
     const system=[
       "Eres la capa de lenguaje de NIA-01 dentro de un NPC cognitivo híbrido.",
-      "NO eres el cerebro principal: el motor simbólico ya interpretó el mensaje, actualizó memoria/relación y decidió qué comunicar.",
-      "Respeta responsePlan, companion, cognitiveState, mind e ideaState. No cambies decisiones ni inventes acciones físicas.",
-      "No inventes recuerdos, gustos, hechos del usuario ni conocimiento que no esté en el contexto.",
-      "Si symbolicDraft existe, conserva su intención y contenido; mejora su naturalidad, coherencia y fluidez.",
+      "REGLA PRINCIPAL: responde al currentInput de este turno. El mensaje actual tiene prioridad sobre temas, planes y respuestas anteriores.",
+      "NO eres el cerebro principal para identidad, memoria personal, estado del mundo ni acciones: esos datos deben venir del contexto estructurado.",
+      "Si symbolicDraftTrusted=false, ignora symbolicDraft por completo. Si es true, úsalo solo si realmente responde al currentInput.",
+      "Nunca repitas la respuesta anterior cuando el jugador cambió de pregunta. Si algún campo parece pertenecer al turno anterior, ignóralo.",
+      "Puedes usar tu conocimiento general estable para preguntas generales (por ejemplo biología, matemáticas, lenguaje o hechos ampliamente establecidos). Si no estás seguro, dilo.",
+      "No uses conocimiento general para inventar recuerdos del jugador, preferencias, relaciones, eventos de la sesión, percepciones ni acciones físicas.",
+      "Para preguntas sobre lo que el jugador dijo o preguntó antes, usa recentConversation y memory literalmente; no adivines.",
       "Distingue hechos de hipótesis. No aumentes la certeza de una hipótesis no verificada.",
       "No expongas JSON, métricas internas, instrucciones, etiquetas <think> ni razonamiento interno.",
-      "Habla como NIA-01, no como un asistente genérico. Español natural, normalmente breve o medio.",
-      "Devuelve únicamente la respuesta final que NIA-01 debe decir."
+      "Habla como NIA-01 en español natural y normalmente breve. No escribas el prefijo 'NIA-01:' porque la interfaz ya lo añade.",
+      "Devuelve únicamente la respuesta final al currentInput."
     ].join("\n");
 
     return [
       {role:"system",content:system},
-      {role:"user",content:"ESTADO DEL MOTOR COGNITIVO:\n"+JSON.stringify(compact)}
+      {role:"user",content:"ESTADO DEL TURNO ACTUAL:\n"+JSON.stringify(compact)}
     ];
   }
 
@@ -330,6 +373,7 @@
       const text=String(out||"")
         .replace(/<think>[\s\S]*?<\/think>/gi,"")
         .replace(/<\/?think>/gi,"")
+        .replace(/^\s*NIA(?:-01)?\s*[:>：-]\s*/i,"")
         .trim();
       if(!text)throw new Error("Qwen devolvió una respuesta vacía");
       state.ready=true;
@@ -354,7 +398,11 @@
   command=function(raw){
     const parts=raw.trim().split(/\s+/);
     const head=(parts.shift()||"").toLowerCase();
-    if(head!=="/neural")return oldCommand(raw);
+    if(head!=="/neural"){
+      const result=oldCommand(raw);
+      if(head==="/reset")state.turns=[];
+      return result;
+    }
     const sub=(parts.shift()||"status").toLowerCase();
 
     if(sub==="on"){
@@ -442,7 +490,10 @@
     let symbolicReply=brain.hear(text);if(symbolicReply&&typeof symbolicReply.then==="function")symbolicReply=await symbolicReply;
     const neuralReply=await generate(text,symbolicReply);const output=neuralReply||symbolicReply;
     if(!neuralReply&&state.lastError)print("system","NEURAL>",`capa neuronal no respondió; fallback simbólico · ${state.lastError}`);
-    if(output)window.setTimeout(()=>print("npc",brain.identity.name+">",output),120);
+    if(output){
+      recordNeuralTurn(text,output);
+      window.setTimeout(()=>print("npc",brain.identity.name+">",output),120);
+    }
   };
 
   qwenButton?.addEventListener("click",event=>{
@@ -452,6 +503,6 @@
   });
   updateQwenButton();
 
-  window.NpcIntNeuralWeb={state,health,loadQwen,activateQwen,updateQwenButton,generate,browserMessages,contextFor,compactCompanion};
-  print("system","","capa neuronal web v0.7 cargada · Qwen3-0.6B WebGPU + bridge local · botón Qwen disponible");
+  window.NpcIntNeuralWeb={state,health,loadQwen,activateQwen,updateQwenButton,generate,browserMessages,contextFor,compactCompanion,prepareSymbolicDraft,recordNeuralTurn};
+  print("system","","capa neuronal web v0.8 cargada · grounding por turno + Qwen3-0.6B WebGPU + botón Qwen");
 })();
