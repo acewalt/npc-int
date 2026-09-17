@@ -6,7 +6,7 @@
   if(!button||!terminal)return;
 
   const label=button.querySelector(".copy-chat-label");
-  const defaultLabel=label?.textContent||"Copiar";
+  const defaultLabelMarkup=label?.innerHTML||"Copiar";
   let feedbackTimer=null;
 
   function lineText(line){
@@ -57,7 +57,7 @@
     button.setAttribute("aria-label",text);
     if(feedbackTimer)clearTimeout(feedbackTimer);
     feedbackTimer=setTimeout(()=>{
-      if(label)label.textContent=defaultLabel;
+      if(label)label.innerHTML=defaultLabelMarkup;
       button.dataset.state="idle";
       button.setAttribute("aria-label","Copiar todo el chat");
     },1600);
