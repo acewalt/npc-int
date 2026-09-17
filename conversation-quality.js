@@ -43,6 +43,19 @@
     return {intent:null,raw:text,canonical:n};
   }
 
+  function frameFor(b,text){
+    const central=window.NpcIntIntentRouter?.currentFor?.(b,text);
+    if(central&&window.NpcIntIntentRouter?.authoritative?.(central)){
+      const routed=central.routes?.quality||null;
+      return {
+        intent:routed,raw:text,canonical:QNorm(text),
+        centralIntent:central.intent,source:"intent-router",
+        ...(central.slots||{})
+      };
+    }
+    return classify(text);
+  }
+
   function substantiveTopic(b,exclude){
     const values=[
       b.conversationArbiter?.lastSubstantiveTopic,
@@ -114,27 +127,27 @@
     return /[?¿]/.test(raw)||/^(que|como|cuando|donde|por que|porque|cual|cuales|quien|quienes|cuanto|cuanta|cuantos|cuantas)\b/.test(n);
   }
 
-  function lastUserQuestion(ctx={}){
+  function lastUserQuestion(ctx={},b=null){
     const history=Array.isArray(ctx.userHistory)?ctx.userHistory:[];
     for(let i=history.length-1;i>=0;i--){
       const item=String(history[i]||"").trim();
-      if(item&&isQuestionLike(item)&&classify(item).intent!=="ask_last_user_question")return item;
+      if(item&&isQuestionLike(item)&&frameFor(b,item).intent!=="ask_last_user_question")return item;
     }
     const prior=String(ctx.priorUser||"").trim();
     return isQuestionLike(prior)?prior:null;
   }
 
-  function previousSubstantiveUser(ctx={}){
+  function previousSubstantiveUser(ctx={},b=null){
     const history=Array.isArray(ctx.userHistory)?ctx.userHistory:[];
     for(let i=history.length-1;i>=0;i--){
       const item=String(history[i]||"").trim();
       if(!item)continue;
-      const intent=classify(item).intent||"";
+      const intent=frameFor(b,item).intent||"";
       if(intent.startsWith("repair_"))continue;
       return item;
     }
     const prior=String(ctx.priorUser||"").trim();
-    return prior&&!String(classify(prior).intent||"").startsWith("repair_")?prior:null;
+    return prior&&!String(frameFor(b,prior).intent||"").startsWith("repair_")?prior:null;
   }
 
   function petAnswer(b,kind){
@@ -179,7 +192,7 @@
   function answerKnown(b,frame,ctx={}){
     switch(frame.intent){
       case "ask_last_user_question":{
-        const previous=lastUserQuestion(ctx);
+        const previous=lastUserQuestion(ctx,b);
         return previous?`La última pregunta que me hiciste fue: «${clip(previous,140)}».`:"No encuentro una pregunta anterior tuya en el historial de esta sesión.";
       }
       case "ask_first_user_message":return firstUserAnswer(b,ctx);
@@ -189,9 +202,9 @@
       case "creator_purpose_statement":return creatorPurposeAnswer(b,frame);
       case "ask_changed_mind":return changedMindAnswer(b);
       case "repair_repeat_question":{
-        const previous=previousSubstantiveUser(ctx);
+        const previous=previousSubstantiveUser(ctx,b);
         if(!previous)return "Sí, entendí que estabas corrigiendo mi respuesta anterior, pero no encuentro una pregunta previa suficientemente clara para reconstruirla.";
-        const pf=classify(previous);
+        const pf=frameFor(b,previous);
         const corrected=answerKnown(b,pf,ctx);
         return corrected?`Sí. Eso fue lo que me preguntaste. Respondiéndolo ahora: ${corrected}`:`Sí. Eso fue lo que me preguntaste: «${clip(previous,120)}». Mi respuesta anterior no lo contestó.`;
       }
@@ -210,9 +223,9 @@
   }
 
   function repairAnswer(b,frame,ctx){
-    const previous=previousSubstantiveUser(ctx) || String(ctx.priorUser||"").trim();
+    const previous=previousSubstantiveUser(ctx,b) || String(ctx.priorUser||"").trim();
     if(previous){
-      const previousFrame=classify(previous);
+      const previousFrame=frameFor(b,previous);
       if(previousFrame.intent&&previousFrame.intent!=="repair_wrong_answer"&&previousFrame.intent!=="repair_misread"){
         const corrected=answerKnown(b,previousFrame,ctx);
         if(corrected)return `Sí: mi respuesta anterior no correspondía a tu pregunta. Retomando «${clip(previous,100)}»: ${corrected}`;
@@ -266,7 +279,7 @@
 
   const oldHear=NpcBrain.prototype.hear;
   NpcBrain.prototype.hear=function(text){
-    const quality=ensure(this),raw=String(text||"").trim(),frame=classify(raw);
+    const quality=ensure(this),raw=String(text||"").trim(),frame=frameFor(this,raw);
     const priorLiteral=quality.lastUserInput || this.dialogue?.lastUser || this.companionState?.lastUserText || this.discourse?.currentUser || "";
     const priorHistory=Array.isArray(quality.userHistory)?quality.userHistory.slice(-12):[];
     const ctx={
@@ -312,10 +325,10 @@
   };
 
   window.NpcIntConversationQuality={
-    classify,refine,isInternalFocus,lastUserQuestion,previousSubstantiveUser,changedMindAnswer,petAnswer,firstUserAnswer,missionIdeaAnswer,
+    classify,frameFor,refine,isInternalFocus,lastUserQuestion,previousSubstantiveUser,changedMindAnswer,petAnswer,firstUserAnswer,missionIdeaAnswer,
     config:{knowledgeMatching:"native:knowledge.js"}
   };
 
   ensure(brain);
-  print("system","","calidad conversacional v1.4 cargada · memoria autobiográfica de mascotas + primer turno + misiones + reparaciones");
+  print("system","","calidad conversacional v1.5 cargada · consume intención central + memoria autobiográfica + reparaciones");
 })();
