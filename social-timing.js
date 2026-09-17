@@ -1,12 +1,20 @@
 "use strict";
 
 (function(){
-  function ensure(b){if(b.socialTiming)return b.socialTiming;b.socialTiming={version:2,lastUserWallMs:0,lastNpcWallMs:0,lastInitiativeWallMs:0,initiativeCount:0,suppressed:0,lastDecision:null};return b.socialTiming;}
-  function noteUser(b,now=Date.now()){const s=ensure(b);s.lastUserWallMs=now;return s;}
-  function noteNpc(b,now=Date.now(),initiative=false){const s=ensure(b);s.lastNpcWallMs=now;if(initiative){s.lastInitiativeWallMs=now;s.initiativeCount++;}return s;}
+  function ensure(b,now=Date.now()){
+    if(!b.socialTiming)b.socialTiming={version:3,startedWallMs:now,lastUserWallMs:0,lastNpcWallMs:0,lastInitiativeWallMs:0,initiativeCount:0,suppressed:0,lastDecision:null};
+    const s=b.socialTiming;
+    if(!Number.isFinite(s.startedWallMs)||s.startedWallMs<=0)s.startedWallMs=now;
+    for(const key of ["lastUserWallMs","lastNpcWallMs","lastInitiativeWallMs","initiativeCount","suppressed"])
+      if(!Number.isFinite(s[key]))s[key]=0;
+    s.version=3;
+    return s;
+  }
+  function noteUser(b,now=Date.now()){const s=ensure(b,now);s.lastUserWallMs=now;return s;}
+  function noteNpc(b,now=Date.now(),initiative=false){const s=ensure(b,now);s.lastNpcWallMs=now;if(initiative){s.lastInitiativeWallMs=now;s.initiativeCount++;}return s;}
   function evaluate(b,meta={}){
-    const s=ensure(b),now=meta.now??Date.now();
-    const sinceUser=now-(s.lastUserWallMs||0),sinceNpc=now-(s.lastNpcWallMs||0),sinceInitiative=now-(s.lastInitiativeWallMs||0);
+    const now=meta.now??Date.now(),s=ensure(b,now);
+    const sinceUser=now-(s.lastUserWallMs||s.startedWallMs||now),sinceNpc=now-(s.lastNpcWallMs||s.startedWallMs||now),sinceInitiative=now-(s.lastInitiativeWallMs||0);
     const urgent=!!meta.urgent,novelty=Math.max(0,Math.min(1,meta.novelty??.4)),score=Math.max(0,Math.min(1,meta.score??.5));
     const relation=b.relationshipModel||{};
     // La simulación avanza minutos cada pocos segundos, pero la cortesía conversacional se
@@ -26,5 +34,5 @@
   }
   function format(b){const s=ensure(b),d=s.lastDecision;return [`iniciativas=${s.initiativeCount} | suprimidas=${s.suppressed}`,d?`última: hablar=${d.canSpeak?"sí":"no"} · motivo=${d.reason} · score=${d.score.toFixed(2)} · novedad=${d.novelty.toFixed(2)} · desde_usuario=${Math.round(d.sinceUser/1000)}s · cooldown=${Math.round(d.initiativeCooldown/1000)}s`:"sin decisión todavía"].join("\n");}
   window.NpcIntSocialTiming={ensure,noteUser,noteNpc,evaluate,format};
-  print("system","","timing social v1.1 cargado · reloj real + silencio deliberado + cooldown largo");
+  print("system","","timing social v1.2 cargado · espera inicial + reloj real + silencio deliberado + cooldown largo");
 })();

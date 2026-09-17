@@ -36,10 +36,48 @@ namespace NpcInt.Core
         public long Id;
         public string Key = string.Empty;
         public string Label = string.Empty;
+        public string Source = "conversation";
+        public string OriginId = string.Empty;
         public string Status = "active";
         public int Mentions;
         public float Importance = 0.55f;
         public DateTime LastMentionedUtc = DateTime.UtcNow;
+    }
+
+    // DTOs con nombres lowerCamel para que el mismo pack JSON pueda cargarse con
+    // Unity JsonUtility o con un serializador externo e inyectarse en NpcInt.Core.
+    // El Core no conoce rutas, TextAsset ni una implementación JSON concreta.
+    [Serializable]
+    public sealed class SocialTopicPack
+    {
+        public string name = string.Empty;
+        public int version = 1;
+        public string language = string.Empty;
+        public string character = string.Empty;
+        public string description = string.Empty;
+        public List<SocialTopicDefinition> topics = new List<SocialTopicDefinition>();
+    }
+
+    [Serializable]
+    public sealed class SocialTopicDefinition
+    {
+        public string id = string.Empty;
+        public string label = string.Empty;
+        public List<string> tags = new List<string>();
+        public string hook = string.Empty;
+        public string opinion = string.Empty;
+        public string followUp = string.Empty;
+        public List<string> relatedTo = new List<string>();
+        public float weight = 0.62f;
+    }
+
+    public sealed class CompanionScoreBreakdown
+    {
+        public float Weight;
+        public float Relevance;
+        public float Novelty;
+        public float Curiosity;
+        public bool ColdStart;
     }
 
     public sealed class CompanionPendingThread
@@ -70,8 +108,17 @@ namespace NpcInt.Core
     public sealed class CompanionIntervention
     {
         public string Intent = string.Empty;
+        public string ContentId = string.Empty;
+        public string Topic = string.Empty;
+        public string Source = string.Empty;
         public string Utterance = string.Empty;
         public string Reason = string.Empty;
+        public string MatchedMemoryKind = string.Empty;
+        public string MatchedMemoryValue = string.Empty;
+        public float Relevance;
+        public float Novelty;
+        public readonly List<string> ReasonCodes = new List<string>();
+        public CompanionScoreBreakdown ScoreBreakdown = new CompanionScoreBreakdown();
         public bool IsInitiative;
         public float Score;
 
@@ -104,5 +151,6 @@ namespace NpcInt.Core
         public float MinutesSinceInitiative = 99f;
         public string LastIntent = string.Empty;
         public string LastReply = string.Empty;
+        public CompanionIntervention LastIntervention;
     }
 }

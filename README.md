@@ -220,6 +220,34 @@ respuesta / acción Unity
 - `src/NpcInt.Core/`: núcleo C# sin dependencia de Unity.
 - `unity/NpcBrainBehaviour.cs`: puente entre el cerebro y acciones de Unity.
 
+## Temas propios e iniciativa social
+
+NIA ya no depende únicamente de repetir algo que el jugador dijo antes para iniciar una conversación. `knowledge/social-topics.es.json` contiene un banco curado de temas, posturas provisionales y preguntas del personaje. No es conocimiento enciclopédico ni una biografía ficticia: cada entrada declara contenido que NIA puede plantear como opinión de personaje.
+
+`initiative-engine.js` cruza ese banco con gustos, preferencias, proyectos, objetivos y el tema activo. La coincidencia solo cambia la **relevancia** de una entrada; no modifica la postura de NIA para darle siempre la razón al jugador. La selección deja una traza con score, relevancia, novedad, códigos de razón y el recuerdo social que coincidió.
+
+Las prioridades se conservan así:
+
+```text
+riesgo urgente
+  > idea nueva / hilo pendiente
+  > tema propio relevante de NIA
+  > tema recurrente genérico
+  > silencio
+```
+
+Un tema propio usado entra después en `topic-manager.js`, de modo que la conversación puede continuarlo, y su historial se persiste para no repetirlo al recargar. El temporizador social impide que NIA lance uno inmediatamente al arrancar o justo después de que el usuario habló.
+
+Para inspeccionar la decisión:
+
+```text
+/initiative
+/topics
+/social-memory
+```
+
+El formato del pack está documentado por `contracts/social-topics.v1.schema.json`. Se pueden añadir temas sin cambiar el selector, siempre que las opiniones sigan siendo revisables y no inventen vivencias humanas.
+
 ## Wikipedia local dividida por temas
 
 El repositorio incluye un constructor para generar aproximadamente **300 MiB de texto de Wikipedia** dividido en shards pequeños y por dominios como matemáticas, historia, física, química, biología, medicina, tecnología, informática e IA, astronomía, geografía, filosofía, arte y literatura, lenguaje, sociedad, economía, derecho y política, religión y mitología, deportes y conocimiento general.

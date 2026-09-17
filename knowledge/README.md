@@ -69,6 +69,22 @@ Ejemplo:
 
 El objetivo no es solo definir palabras: el lexicón debe ayudar a **interpretar intención**. `qué onda` no debería analizarse literalmente como una pregunta física sobre ondas.
 
+## 4. Contenido social del personaje
+
+`social-topics.es.json` no contiene hechos sobre el mundo ni recuerdos del jugador. Contiene temas que NIA puede proponer por iniciativa propia, con una postura provisional y una pregunta de continuidad.
+
+El selector usa `tags` y `relatedTo` para medir afinidad con preferencias, proyectos, objetivos y temas que el usuario ya compartió. Esa afinidad decide **cuándo resulta relevante mencionar una entrada**, pero nunca reescribe la opinión para complacer al usuario.
+
+Reglas del pack:
+
+- no presentar una opinión como hecho enciclopédico;
+- no inventar infancia, cuerpo, experiencias humanas ni encuentros pasados;
+- no usar exclusividad, culpa o dependencia para sostener la conversación;
+- redactar posturas que puedan revisarse ante nueva evidencia;
+- mantener identificadores estables, porque el historial anti-repetición los persiste.
+
+El contrato de datos está en `contracts/social-topics.v1.schema.json`.
+
 ### Diccionario grande/offline
 
 Para construir una base léxica extensa a partir de un dump de Wiktionary/Wikcionario:

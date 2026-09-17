@@ -46,11 +46,18 @@
     const s=sanitize(ensure(b)),topicText=meta.topic||candidate(text);if(!topicText||!isKeepable(topicText))return null;
     const k=key(topicText);if(!k)return null;
     let t=s.topics.find(x=>x.key===k);
-    if(!t){t={id:s.seq++,key:k,label:topicText,status:"active",mentions:0,importance:meta.importance??.58,createdTime:b.time||0,lastTime:b.time||0,lastWallMs:Date.now(),source:meta.source||"user",summary:topicText};s.topics.push(t);}
+    if(!t){t={id:s.seq++,key:k,label:topicText,status:"active",mentions:0,importance:meta.importance??.58,createdTime:b.time||0,lastTime:b.time||0,lastWallMs:Date.now(),source:meta.source||"user",originId:meta.originId||null,summary:topicText};s.topics.push(t);}
+    if(meta.originId)t.originId=meta.originId;
+    if(meta.source)t.source=meta.source;
     t.mentions++;t.lastTime=b.time||0;t.lastWallMs=Date.now();t.status="active";t.importance=Math.min(1,Math.max(t.importance,meta.importance??.58)+.015);
     if(s.activeId&&s.activeId!==t.id){const prev=s.topics.find(x=>x.id===s.activeId);if(prev&&prev.status==="active")prev.status="dormant";}
     s.activeId=t.id;s.history.push({time:b.time||0,topicId:t.id,label:t.label});if(s.history.length>50)s.history.shift();
     return t;
+  }
+  function noteNpcTopic(b,topic,meta={}){
+    const label=typeof topic==="string"?topic:topic?.label;
+    if(!label||!isKeepable(label))return null;
+    return noteTurn(b,label,{topic:label,importance:meta.importance??.62,source:meta.source||"npc-social-topic",originId:typeof topic==="object"?topic.id:null});
   }
   function active(b){const s=sanitize(ensure(b));return s.topics.find(x=>x.id===s.activeId)||null;}
   function recent(b,count=5){return sanitize(ensure(b)).topics.slice().sort((a,c)=>(c.lastWallMs||0)-(a.lastWallMs||0)).slice(0,count);}
@@ -60,6 +67,6 @@
   function restore(b,data){const s=ensure(b);if(!data||!Array.isArray(data.topics))return sanitize(s);s.topics=data.topics.filter(x=>x&&x.label&&isKeepable(x.label)).slice(-60);s.seq=Math.max(1,...s.topics.map(x=>Number(x.id)||0))+1;s.activeId=s.topics.some(x=>x.id===data.activeId)?data.activeId:null;return sanitize(s);}
   function format(b){const s=sanitize(ensure(b)),a=active(b);return [`activo=${a?.label||"—"}`,`temas=${s.topics.length}`,...recent(b,10).map(t=>`#${t.id} [${t.status}] ${t.label} · menciones=${t.mentions} · imp=${t.importance.toFixed(2)}`)].join("\n");}
 
-  window.NpcIntTopics={ensure,candidate,isKeepable,noteTurn,active,recent,resumeCandidate,mark,snapshot,restore,format};
+  window.NpcIntTopics={ensure,candidate,isKeepable,noteTurn,noteNpcTopic,active,recent,resumeCandidate,mark,snapshot,restore,format};
   print("system","","gestor de temas v1.2 cargado · preguntas/meta fuera del tópico + continuidad selectiva");
 })();

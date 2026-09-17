@@ -19,6 +19,10 @@ __pycache__/
 *.pyc
 .venv/
 
+# .NET / Unity core builds
+bin/
+obj/
+
 # SO / editores
 .DS_Store
 Thumbs.db

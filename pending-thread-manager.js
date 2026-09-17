@@ -7,9 +7,9 @@
   function ensure(b){if(b.pendingThreads)return b.pendingThreads;b.pendingThreads={version:1,seq:1,items:[]};return b.pendingThreads;}
   function add(b,kind,text,meta={}){
     const s=ensure(b),clean=String(text||"").trim().replace(/[?!.]+$/g,"");if(!clean||sensitive.test(norm(clean)))return null;
-    const k=`${kind}:${norm(clean)}`;let x=s.items.find(i=>i.key===k&&i.status!=="resolved");
-    if(x){x.lastTime=b.time||0;x.lastWallMs=Date.now();x.mentions++;x.priority=Math.max(x.priority,meta.priority??x.priority);return x;}
-    x={id:s.seq++,key:k,kind,text:clean,status:"open",priority:meta.priority??.58,source:meta.source||"conversation",createdTime:b.time||0,lastTime:b.time||0,lastWallMs:Date.now(),mentions:1};s.items.push(x);if(s.items.length>60)s.items.shift();return x;
+    const k=`${kind}:${norm(clean)}`,existingIndex=s.items.findIndex(i=>i.key===k&&i.status!=="resolved");let x=existingIndex>=0?s.items[existingIndex]:null;
+    if(x){x.lastTime=b.time||0;x.lastWallMs=Date.now();x.mentions++;x.priority=Math.max(x.priority,meta.priority??x.priority);if(meta.source)x.source=meta.source;if(meta.originId)x.originId=meta.originId;s.items.splice(existingIndex,1);s.items.push(x);return x;}
+    x={id:s.seq++,key:k,kind,text:clean,status:"open",priority:meta.priority??.58,source:meta.source||"conversation",originId:meta.originId||null,createdTime:b.time||0,lastTime:b.time||0,lastWallMs:Date.now(),mentions:1};s.items.push(x);if(s.items.length>60)s.items.shift();return x;
   }
   function latestQuestion(b){return [...ensure(b).items].reverse().find(x=>x.kind==="question"&&x.status==="open")||null;}
   function noteUser(b,text){
@@ -29,11 +29,11 @@
     }
     return added.filter(Boolean);
   }
-  function noteNpc(b,reply){
+  function noteNpc(b,reply,meta={}){
     const raw=String(reply||"").trim();if(!raw)return null;
     const questions=[...raw.matchAll(/([^.!?¿]{4,120}[?])/g)].map(m=>m[1].trim());
     if(!questions.length)return null;
-    const q=questions[questions.length-1];return add(b,"question",q,{priority:.50,source:"npc-question"});
+    const q=questions[questions.length-1];return add(b,"question",q,{priority:.50,source:meta.source||"npc-question",originId:meta.originId||null});
   }
   function best(b){return ensure(b).items.filter(x=>x.status==="open").sort((a,c)=>(c.priority+c.mentions*.03)-(a.priority+a.mentions*.03))[0]||null;}
   function resolve(b,id,reason="resolved"){const x=ensure(b).items.find(i=>i.id===id||i.key===id);if(x){x.status="resolved";x.resolvedReason=reason;x.resolvedTime=b.time||0;}return x||null;}

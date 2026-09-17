@@ -10,7 +10,8 @@
       socialMemory:window.NpcIntSocialMemory?.snapshot?.(b)||null,
       personality:window.NpcIntPersonality?.snapshot?.(b)||null,
       topics:window.NpcIntTopics?.snapshot?.(b)||null,
-      pending:window.NpcIntPending?.snapshot?.(b)||null
+      pending:window.NpcIntPending?.snapshot?.(b)||null,
+      initiative:window.NpcIntInitiative?.snapshot?.(b)||null
     };
   }
   function save(b){if(!available())return {ok:false,error:"localStorage no disponible"};try{const data=payload(b);localStorage.setItem(KEY,JSON.stringify(data));return {ok:true,data};}catch(err){return {ok:false,error:String(err?.message||err)};}}
@@ -22,11 +23,12 @@
       window.NpcIntPersonality?.restore?.(b,d.personality);
       window.NpcIntTopics?.restore?.(b,d.topics);
       window.NpcIntPending?.restore?.(b,d.pending);
+      window.NpcIntInitiative?.restore?.(b,d.initiative);
       if(b.companionState)b.companionState.loadedFromStorage=true;
       return {ok:true,data:d};
     }catch(err){return {ok:false,error:String(err?.message||err)};}
   }
-  function clear(b){if(available())try{localStorage.removeItem(KEY);}catch(_){ }window.NpcIntSocialMemory?.clear?.(b);return {ok:true};}
+  function clear(b){if(available())try{localStorage.removeItem(KEY);}catch(_){ }window.NpcIntSocialMemory?.clear?.(b);window.NpcIntInitiative?.clear?.(b);return {ok:true};}
   function inspect(){if(!available())return null;try{const raw=localStorage.getItem(KEY);return raw?JSON.parse(raw):null;}catch(_){return null;}}
   window.NpcIntCompanionPersistence={KEY,available,payload,save,load,clear,inspect};
   print("system","","persistencia social v1.0 cargada · memoria seleccionada en localStorage");

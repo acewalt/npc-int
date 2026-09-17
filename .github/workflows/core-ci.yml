@@ -6,12 +6,16 @@ on:
     paths:
       - "src/**"
       - "unity/**"
+      - "knowledge/social-topics.es.json"
+      - "contracts/social-topics.v1.schema.json"
       - "tests/NpcInt.Core.CompanionSmoke/**"
       - ".github/workflows/core-ci.yml"
   pull_request:
     paths:
       - "src/**"
       - "unity/**"
+      - "knowledge/social-topics.es.json"
+      - "contracts/social-topics.v1.schema.json"
       - "tests/NpcInt.Core.CompanionSmoke/**"
       - ".github/workflows/core-ci.yml"
   workflow_dispatch:

@@ -63,7 +63,21 @@ El silencio es una acción válida. Evalúa tiempo desde el último turno, urgen
 
 ### `initiative-engine.js`
 
-Puede iniciar un turno cuando existe una razón concreta: retomar un proyecto, compartir una idea nueva, recuperar un tema recurrente, hacer una pregunta dirigida o alertar de riesgo. Evita repetir la misma iniciativa en poco tiempo.
+Puede iniciar un turno cuando existe una razón concreta: retomar un proyecto, compartir una idea nueva, recuperar un tema recurrente, proponer un tema propio, hacer una pregunta dirigida o alertar de riesgo. Evita repetir la misma iniciativa en poco tiempo.
+
+### `knowledge/social-topics.es.json`
+
+Es el banco de contenido social propio de NIA. Cada entrada separa:
+
+- `hook`: forma de abrir el tema;
+- `opinion`: postura provisional del personaje;
+- `followUp`: pregunta que permite compartir el turno;
+- `tags` y `relatedTo`: señales para relacionarlo con memoria social y contexto;
+- `weight`: interés base del personaje.
+
+El banco no se mezcla con `social-memory`: esa memoria describe al usuario, mientras que el pack describe contenido autorizado del personaje. `initiative-engine.js` calcula afinidad con gustos, preferencias, proyectos, objetivos y tema activo; después deja `reasonCodes`, relevancia y el recuerdo coincidente para depuración. Un tema propio nunca supera la prioridad de una alerta, una idea nueva o un pendiente importante.
+
+Cuando NIA comparte una entrada, recién entonces se promueve a `topic-manager.js` con procedencia `character-social-topic`. El historial de uso se persiste para conservar la rotación entre recargas. Antes de hablar siguen aplicándose la espera inicial, el cooldown y `output-safety.js`.
 
 ### `companion-persistence.js`
 
@@ -102,6 +116,8 @@ NLP
 ```
 
 En inactividad el `CompanionEngine` puede sustituir monólogos genéricos por una iniciativa contextual o por `StaySilent`.
+
+El núcleo C# recibe el mismo pack por inyección; no conoce archivos ni depende de APIs de Unity. `NpcBrainBehaviour` puede cargar el JSON como `TextAsset` y entregarlo a `CompanionEngine`, manteniendo una sola fuente de contenido para web y juego.
 
 ## Diagnóstico
 

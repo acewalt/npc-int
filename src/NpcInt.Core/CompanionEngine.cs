@@ -8,11 +8,57 @@ namespace NpcInt.Core
     public sealed class CompanionEngine
     {
         private readonly List<SocialMemoryRecord> _lastExtracted = new List<SocialMemoryRecord>();
+        private readonly List<SocialTopicDefinition> _socialTopics = new List<SocialTopicDefinition>();
+        private static readonly HashSet<string> SocialTopicStopWords = new HashSet<string>
+        {
+            "que", "como", "para", "pero", "porque", "esto", "eso", "una", "uno", "unos", "unas",
+            "del", "las", "los", "con", "por", "soy", "estoy", "quiero", "gusta", "hacer", "algo",
+            "sobre", "entre", "parte"
+        };
+        private static readonly HashSet<string> SocialTopicShortTokens = new HashSet<string>
+        {
+            "ia", "ui", "ux", "vr", "ar", "2d", "3d"
+        };
+
         public CompanionState State { get; private set; } = new CompanionState();
+        public IReadOnlyList<SocialTopicDefinition> SocialTopics { get { return _socialTopics; } }
+
+        public int ConfigureSocialTopics(IEnumerable<SocialTopicDefinition> topics)
+        {
+            _socialTopics.Clear();
+            if (topics == null) return 0;
+
+            var ids = new HashSet<string>(StringComparer.Ordinal);
+            foreach (SocialTopicDefinition topic in topics)
+            {
+                if (topic == null || string.IsNullOrWhiteSpace(topic.id) ||
+                    string.IsNullOrWhiteSpace(topic.label) || string.IsNullOrWhiteSpace(topic.hook) ||
+                    string.IsNullOrWhiteSpace(topic.opinion) || string.IsNullOrWhiteSpace(topic.followUp))
+                    continue;
+
+                string id = topic.id.Trim();
+                if (!ids.Add(id)) continue;
+
+                _socialTopics.Add(new SocialTopicDefinition
+                {
+                    id = id,
+                    label = topic.label.Trim(),
+                    tags = CleanStrings(topic.tags),
+                    hook = topic.hook.Trim(),
+                    opinion = topic.opinion.Trim(),
+                    followUp = topic.followUp.Trim(),
+                    relatedTo = CleanStrings(topic.relatedTo),
+                    weight = MathUtil.Clamp01(topic.weight)
+                });
+            }
+
+            return _socialTopics.Count;
+        }
 
         public void ObserveUserTurn(NpcBrain brain, string message)
         {
             if (brain == null) return;
+            State.LastIntervention = null;
             message = (message ?? string.Empty).Trim();
             string n = MemoryStore.Normalize(message);
             CompanionRelationship r = State.Relationship;
@@ -108,8 +154,101 @@ namespace NpcInt.Core
             State.Relationship.BoundaryPressure = MathUtil.Clamp01(State.Relationship.BoundaryPressure - minutes * 0.007f);
         }
 
+        public CompanionIntervention SelectSocialTopic(NpcBrain brain)
+        {
+            if (brain == null || _socialTopics.Count == 0) return null;
+
+            var memories = new List<SocialMemoryRecord>();
+            memories.AddRange(BestSocialMemories("like"));
+            memories.AddRange(BestSocialMemories("preference"));
+            memories.AddRange(BestSocialMemories("project"));
+            memories.AddRange(BestSocialMemories("goal"));
+            memories.AddRange(BestSocialMemories("shared-update"));
+            List<SocialMemoryRecord> dislikes = BestSocialMemories("dislike");
+            CompanionTopic active = State.Topics.FirstOrDefault(x => x.Id == State.ActiveTopicId && x.Status == "active");
+            CompanionIntervention best = null;
+
+            foreach (SocialTopicDefinition topic in _socialTopics)
+            {
+                string initiativeKey = "social-topic:" + topic.id;
+                if (RecentlyInitiated(initiativeKey)) continue;
+                if (dislikes.Any(x => SocialTopicSimilarity(x.Value, topic) >= 0.58f)) continue;
+
+                float affinity = 0f;
+                SocialMemoryRecord matched = null;
+                for (int i = 0; i < memories.Count; i++)
+                {
+                    float candidateAffinity = SocialTopicSimilarity(memories[i].Value, topic);
+                    if (candidateAffinity > affinity)
+                    {
+                        affinity = candidateAffinity;
+                        matched = memories[i];
+                    }
+                }
+
+                float activeAffinity = active == null ? 0f : SocialTopicSimilarity(active.Label, topic);
+                int priorUses = State.InitiativeHistory.Count(x => x == initiativeKey);
+                float novelty = MathUtil.Clamp01(0.78f + affinity * 0.10f - priorUses * 0.16f);
+                float relevance = Math.Max(affinity, activeAffinity * 0.90f);
+                float curiosity = MathUtil.Clamp01(GetTrait("curiosity", brain.Drives.Curiosity));
+                bool coldStart = relevance < 0.34f;
+                float score = Math.Min(0.72f, MathUtil.Clamp01(
+                    0.38f + topic.weight * 0.10f + relevance * 0.12f + novelty * 0.07f +
+                    curiosity * 0.05f + (coldStart ? 0.03f : 0f)));
+
+                var intervention = new CompanionIntervention
+                {
+                    Intent = "social_topic",
+                    ContentId = topic.id,
+                    Topic = topic.label,
+                    Source = "character-social-topic",
+                    Utterance = JoinSocialTopicText(topic),
+                    IsInitiative = true,
+                    Score = score,
+                    Relevance = relevance,
+                    Novelty = novelty,
+                    ScoreBreakdown = new CompanionScoreBreakdown
+                    {
+                        Weight = topic.weight,
+                        Relevance = relevance,
+                        Novelty = novelty,
+                        Curiosity = curiosity,
+                        ColdStart = coldStart
+                    }
+                };
+
+                intervention.ReasonCodes.Add("character_interest");
+                intervention.ReasonCodes.Add(priorUses > 0 ? "rotated" : "unseen");
+                if (matched != null && affinity >= 0.34f)
+                {
+                    intervention.MatchedMemoryKind = matched.Kind;
+                    intervention.MatchedMemoryValue = matched.Value;
+                    intervention.ReasonCodes.Add("matches_user_" + matched.Kind);
+                    string kind = matched.Kind == "project" || matched.Kind == "goal"
+                        ? "tu proyecto u objetivo"
+                        : "una preferencia tuya";
+                    intervention.Reason = "tema propio relacionado con " + kind + ": «" + Shorten(matched.Value, 70) + "»";
+                }
+                else if (active != null && activeAffinity >= 0.34f)
+                {
+                    intervention.ReasonCodes.Add("matches_active_topic");
+                    intervention.Reason = "tema propio relacionado con el foco activo «" + Shorten(active.Label, 70) + "»";
+                }
+                else
+                {
+                    intervention.ReasonCodes.Add("cold_start");
+                    intervention.Reason = "tema propio coherente con la curiosidad y los valores del personaje";
+                }
+
+                if (best == null || IsBetterSocialTopic(intervention, best)) best = intervention;
+            }
+
+            return best;
+        }
+
         public NpcAction AdaptIdleAction(NpcBrain brain, NpcAction lower)
         {
+            State.LastIntervention = null;
             if (brain == null) return lower;
             if (brain.Drives.Threat > 0.64f) return lower;
             if (State.MinutesSinceUser < 8f)
@@ -128,6 +267,22 @@ namespace NpcInt.Core
                     Utterance = "Antes quedó pendiente «" + Shorten(pending.Text, 78) + "». Podemos retomarlo cuando tenga sentido, sin empezar de cero.",
                     Reason = "companion: retomar un hilo compartido pendiente",
                     Utility = 0.78f
+                };
+            }
+
+            CompanionIntervention socialTopic = SelectSocialTopic(brain);
+            if (socialTopic != null && socialTopic.Score >= 0.58f)
+            {
+                State.MinutesSinceInitiative = 0f;
+                RememberInitiative("social-topic:" + socialTopic.ContentId);
+                PromoteSocialTopic(socialTopic);
+                State.LastIntervention = socialTopic;
+                return new NpcAction
+                {
+                    Kind = ActionKind.Speak,
+                    Utterance = socialTopic.Utterance,
+                    Reason = "companion: social_topic:" + socialTopic.ContentId + " · " + socialTopic.Reason,
+                    Utility = socialTopic.Score
                 };
             }
 
@@ -291,6 +446,38 @@ namespace NpcInt.Core
             item.Mentions++;
             item.LastMentionedUtc = DateTime.UtcNow;
             item.Importance = MathUtil.Clamp01(item.Importance + 0.015f);
+            State.ActiveTopicId = item.Id;
+        }
+
+        private void PromoteSocialTopic(CompanionIntervention intervention)
+        {
+            if (intervention == null || string.IsNullOrWhiteSpace(intervention.Topic)) return;
+            string key = MemoryStore.Normalize(intervention.Topic).Trim();
+            CompanionTopic item = State.Topics.FirstOrDefault(x => x.Key == key);
+            if (item == null)
+            {
+                item = new CompanionTopic
+                {
+                    Id = State.NextTopicId++,
+                    Key = key,
+                    Label = intervention.Topic,
+                    Importance = intervention.Score,
+                    Source = "character-social-topic",
+                    OriginId = intervention.ContentId
+                };
+                State.Topics.Add(item);
+            }
+
+            foreach (CompanionTopic other in State.Topics)
+                if (other.Id != item.Id && other.Status == "active") other.Status = "dormant";
+
+            item.Label = intervention.Topic;
+            item.Source = "character-social-topic";
+            item.OriginId = intervention.ContentId;
+            item.Status = "active";
+            item.Mentions++;
+            item.LastMentionedUtc = DateTime.UtcNow;
+            item.Importance = MathUtil.Clamp01(Math.Max(item.Importance, intervention.Score) + 0.015f);
             State.ActiveTopicId = item.Id;
         }
 
@@ -460,6 +647,73 @@ namespace NpcInt.Core
             r.Stage = score > 0.73f && r.Interactions > 18 ? "cercano" :
                       score > 0.56f && r.Interactions > 9 ? "familiar" :
                       score > 0.38f && r.Interactions > 3 ? "conocido" : "nuevo";
+        }
+
+        private static List<string> CleanStrings(IEnumerable<string> values)
+        {
+            if (values == null) return new List<string>();
+            return values
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Select(x => x.Trim())
+                .ToList();
+        }
+
+        private List<SocialMemoryRecord> BestSocialMemories(string kind)
+        {
+            return State.SocialMemories
+                .Where(x => x.Kind == kind)
+                .OrderByDescending(x => x.Importance + x.Mentions * 0.03f)
+                .Take(5)
+                .ToList();
+        }
+
+        private static string JoinSocialTopicText(SocialTopicDefinition topic)
+        {
+            return string.Join(" ", new[] { topic.hook, topic.opinion, topic.followUp }
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Select(x => x.Trim())
+                .ToArray());
+        }
+
+        private static bool IsBetterSocialTopic(CompanionIntervention candidate, CompanionIntervention current)
+        {
+            if (candidate.Score != current.Score) return candidate.Score > current.Score;
+            if (candidate.Novelty != current.Novelty) return candidate.Novelty > current.Novelty;
+            return string.Compare(candidate.ContentId, current.ContentId, StringComparison.Ordinal) < 0;
+        }
+
+        private static float SocialTopicSimilarity(string value, SocialTopicDefinition topic)
+        {
+            float best = TextAffinity(value, topic.label);
+            if (topic.tags != null)
+                for (int i = 0; i < topic.tags.Count; i++) best = Math.Max(best, TextAffinity(value, topic.tags[i]));
+            if (topic.relatedTo != null)
+                for (int i = 0; i < topic.relatedTo.Count; i++) best = Math.Max(best, TextAffinity(value, topic.relatedTo[i]));
+            return best;
+        }
+
+        private static float TextAffinity(string a, string b)
+        {
+            HashSet<string> left = SocialTopicTokens(a);
+            HashSet<string> right = SocialTopicTokens(b);
+            if (left.Count == 0 || right.Count == 0) return 0f;
+            int common = 0;
+            foreach (string token in left) if (right.Contains(token)) common++;
+            return (float)common / Math.Min(left.Count, right.Count);
+        }
+
+        private static HashSet<string> SocialTopicTokens(string value)
+        {
+            string normalized = MemoryStore.Normalize(value ?? string.Empty);
+            var result = new HashSet<string>(StringComparer.Ordinal);
+            MatchCollection matches = Regex.Matches(normalized, "[a-z0-9ñ]+", RegexOptions.CultureInvariant);
+            for (int i = 0; i < matches.Count; i++)
+            {
+                string token = matches[i].Value;
+                if ((token.Length > 2 || SocialTopicShortTokens.Contains(token)) &&
+                    !SocialTopicStopWords.Contains(token)) result.Add(token);
+            }
+            return result;
         }
 
         private float GetTrait(string key, float fallback)

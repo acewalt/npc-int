@@ -7,6 +7,8 @@ on:
       - "*.js"
       - "tests/**"
       - "config/**"
+      - "knowledge/**"
+      - "contracts/social-topics.v1.schema.json"
       - "index.html"
       - ".github/workflows/web-ci.yml"
   pull_request:
@@ -14,6 +16,8 @@ on:
       - "*.js"
       - "tests/**"
       - "config/**"
+      - "knowledge/**"
+      - "contracts/social-topics.v1.schema.json"
       - "index.html"
       - ".github/workflows/web-ci.yml"
 

@@ -9,6 +9,7 @@
     constructor(){
       this.encyclopedia=[];
       this.dictionary=[];
+      this.socialTopics=[];
       this.ready=false;
       this.sources=[];
       this.wikipediaCache=new Map();
@@ -20,11 +21,15 @@
         for(const pack of manifest.packs||[]){
           const data=await fetch(pack.path,{cache:"no-cache"}).then(r=>r.json());
           if(pack.type==="dictionary")this.dictionary.push(...(data.entries||[]));
+          else if(pack.type==="social-topics"){
+            const valid=(data.topics||[]).filter(x=>x&&x.id&&x.label&&x.hook&&x.opinion&&x.followUp&&Array.isArray(x.tags)&&x.tags.length&&Array.isArray(x.relatedTo)&&Number.isFinite(Number(x.weight))&&Number(x.weight)>=0&&Number(x.weight)<=1);
+            this.socialTopics.push(...valid);
+          }
           else this.encyclopedia.push(...(data.entries||[]));
           this.sources.push({type:pack.type,path:pack.path,name:data.name||pack.path});
         }
         this.ready=true;
-        print("system","",`conocimiento v0.2 cargado · ${this.encyclopedia.length} conceptos · ${this.dictionary.length} entradas léxicas · Wikipedia online disponible`);
+        print("system","",`conocimiento v0.3 cargado · ${this.encyclopedia.length} conceptos · ${this.dictionary.length} entradas léxicas · ${this.socialTopics.length} temas sociales · Wikipedia online disponible`);
       }catch(err){
         console.warn("Knowledge load failed",err);
         print("error","KNOWLEDGE>","no pude cargar los packs locales; Wikipedia online seguirá disponible si hay conexión");
@@ -164,7 +169,7 @@
       }
     }
 
-    stats(){return {concepts:this.encyclopedia.length,words:this.dictionary.length,sources:this.sources.length,ready:this.ready,cachedWikipedia:this.wikipediaCache.size};}
+    stats(){return {concepts:this.encyclopedia.length,words:this.dictionary.length,socialTopics:this.socialTopics.length,sources:this.sources.length,ready:this.ready,cachedWikipedia:this.wikipediaCache.size};}
   }
 
   const store=new KnowledgeStore();
@@ -246,7 +251,7 @@
     }
     if(h==="/knowledge"){
       const s=store.stats();
-      print("debug","KNOWLEDGE>",`ready=${s.ready} | conceptos_locales/cache=${s.concepts} | diccionario=${s.words} | Wikipedia_cache=${s.cachedWikipedia} | packs=${s.sources}`);
+      print("debug","KNOWLEDGE>",`ready=${s.ready} | conceptos_locales/cache=${s.concepts} | diccionario=${s.words} | temas_sociales=${s.socialTopics} | Wikipedia_cache=${s.cachedWikipedia} | packs=${s.sources}`);
       return;
     }
     if(h==="/define"){

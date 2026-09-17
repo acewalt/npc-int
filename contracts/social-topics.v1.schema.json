@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://acewalt.github.io/npc-int/contracts/social-topics.v1.schema.json",
+  "title": "NPC-INT social topic pack v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["name", "version", "language", "character", "topics"],
+  "properties": {
+    "name": {"type": "string", "minLength": 1},
+    "version": {"const": 1},
+    "language": {"const": "es"},
+    "character": {"type": "string", "minLength": 1},
+    "description": {"type": "string"},
+    "topics": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/topic"}
+    }
+  },
+  "$defs": {
+    "nonEmptyStrings": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "topic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "label", "tags", "hook", "opinion", "followUp", "relatedTo", "weight"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[a-z0-9_]+$"},
+        "label": {"type": "string", "minLength": 3},
+        "tags": {"$ref": "#/$defs/nonEmptyStrings"},
+        "hook": {"type": "string", "minLength": 12},
+        "opinion": {"type": "string", "minLength": 12},
+        "followUp": {"type": "string", "minLength": 8},
+        "relatedTo": {"$ref": "#/$defs/nonEmptyStrings"},
+        "weight": {"type": "number", "minimum": 0, "maximum": 1}
+      }
+    }
+  }
+}

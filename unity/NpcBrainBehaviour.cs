@@ -23,6 +23,7 @@ public sealed class NpcBrainBehaviour : MonoBehaviour
 
     [Header("Companion / Social")]
     [SerializeField] private bool useCompanionEngine = true;
+    [SerializeField] private TextAsset socialTopicsPack;
     [SerializeField] private bool logCompanionState = false;
 
     [Header("Debug")]
@@ -59,8 +60,27 @@ public sealed class NpcBrainBehaviour : MonoBehaviour
         _mind = new MentalCycleEngine(_brain);
         _ideas = new IdeaFormationEngine();
         _companion = new CompanionEngine();
+        ConfigureSocialTopics();
         if (nlpBridge == null) nlpBridge = GetComponent<NlpBridgeClient>();
         Debug.Log("NPC brain initialized: " + _brain.DescribeState());
+    }
+
+    private void ConfigureSocialTopics()
+    {
+        if (socialTopicsPack == null || string.IsNullOrWhiteSpace(socialTopicsPack.text)) return;
+        try
+        {
+            SocialTopicPack pack = JsonUtility.FromJson<SocialTopicPack>(socialTopicsPack.text);
+            int loaded = _companion.ConfigureSocialTopics(pack == null ? null : pack.topics);
+            if (loaded == 0)
+                Debug.LogWarning(name + " social topics pack did not contain valid topics: " + socialTopicsPack.name);
+            else if (logCompanionState)
+                Debug.Log(name + " social topics loaded: " + loaded + " from " + socialTopicsPack.name);
+        }
+        catch (Exception ex)
+        {
+            Debug.LogWarning(name + " could not load social topics pack " + socialTopicsPack.name + ": " + ex.Message);
+        }
     }
 
     private void Update()
