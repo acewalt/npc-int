@@ -173,10 +173,17 @@
   NpcBrain.prototype.tick=function(minutes=1){
     ensure(this);window.NpcIntRelationship?.decay?.(this,minutes);const out=oldTick.call(this,minutes);
     const finish=lower=>{
+      const now=Date.now();
       const n=norm(lower);const urgent=!!lower&&/peligro|amenaza|ataque|auxilio|riesgo/.test(n);
-      if(urgent){window.NpcIntSocialTiming?.noteNpc?.(this,Date.now(),true);return lower;}
-      const c=window.NpcIntInitiative?.choose?.(this)||null;
-      if(c)return window.NpcIntInitiative.commit(this,c);
+      if(urgent){window.NpcIntSocialTiming?.noteNpc?.(this,now,true);return lower;}
+
+      // El árbitro ya registra la última interacción humana. La iniciativa no debe
+      // saltarse esa ventana y hablar encima de una conversación activa.
+      const lastUser=Number(this.conversationArbiter?.lastUserWallMs||0);
+      if(lastUser&&now-lastUser<60000)return null;
+
+      const candidate=window.NpcIntInitiative?.choose?.(this,{now})||null;
+      if(candidate)return window.NpcIntInitiative.commit(this,candidate,now);
       if(!lower)return null;
       if(/sigues ahi|demasiadas preguntas|no quiero limitarme a esperar una orden|quiero aprender algo nuevo del entorno/.test(n))return null;
       const t=window.NpcIntSocialTiming?.evaluate?.(this,{score:.60,novelty:.42,urgent:false});
@@ -209,5 +216,5 @@
 
   ensure(brain);
   window.NpcIntCompanion={ensure,classify,socialReply,status,greetingAnswer,sharedActivity,memoryAnswer};
-  print("system","","companion engine v1.0 cargado · relación + memoria social + personalidad + iniciativa + silencio + continuidad");
+  print("system","","companion engine v1.1 cargado · relación + memoria social + iniciativa con ventana conversacional + continuidad");
 })();
