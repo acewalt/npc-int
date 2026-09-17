@@ -138,7 +138,7 @@ namespace NpcInt.Core
                 CompanionState state = companionEngine.State;
                 CompanionTopic active = state.Topics
                     .Where(x => x.Status == "active")
-                    .OrderByDescending(x => x.LastTime)
+                    .OrderByDescending(x => x.LastMentionedUtc)
                     .FirstOrDefault();
                 envelope.companion = new NpcTurnCompanion
                 {
