@@ -345,10 +345,23 @@
   const oldReset=NpcBrain.prototype.reset;
   NpcBrain.prototype.reset=function(){oldReset.call(this);this.intentRouter=null;ensure(this);};
 
+  function syncQueryFrame(b,text){
+    try{
+      const api=window.NpcIntQueryFrame;
+      if(!api?.build||!api?.record)return;
+      const current=b.queryFrame?.current;
+      if(current&&norm(current.input)===norm(text)&&current.intent===b.intentRouter?.current?.intent)return;
+      api.record(b,api.build(text,b));
+    }catch(_){}
+  }
+
   const oldHear=NpcBrain.prototype.hear;
   NpcBrain.prototype.hear=function(text){
-    resolve(String(text||"").trim(),this,{record:true});
-    return oldHear.call(this,text);
+    const raw=String(text||"").trim();
+    resolve(raw,this,{record:true});
+    const result=oldHear.call(this,text);
+    const finish=value=>{syncQueryFrame(this,raw);return value;};
+    return result&&typeof result.then==="function"?result.then(finish):finish(result);
   };
 
   const oldCommand=command;
@@ -359,6 +372,6 @@
   };
 
   ensure(brain);
-  window.NpcIntIntentRouter={version:VERSION,ensure,resolve,currentFor,routeFor,authoritative,embed,cosine,format,domainFor};
+  window.NpcIntIntentRouter={version:VERSION,ensure,resolve,currentFor,routeFor,authoritative,embed,cosine,format,domainFor,syncQueryFrame};
   print("system","","intent router v1.0 cargado · fuente única de intención + embedding local + /intent");
 })();
