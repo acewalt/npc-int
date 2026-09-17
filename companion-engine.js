@@ -189,6 +189,8 @@
       // saltarse esa ventana y hablar encima de una conversación activa.
       const neuralState=window.NpcIntQwenBrowser?.state;
       if(neuralState?.loading||neuralState?.generating)return null;
+      const lastNeuralOutput=Number(window.NpcIntNeuralWeb?.state?.lastOutputWallMs||0);
+      if(lastNeuralOutput&&now-lastNeuralOutput<60000)return null;
       const lastUser=Number(this.conversationArbiter?.lastUserWallMs||0);
       if(lastUser&&now-lastUser<60000)return null;
 
