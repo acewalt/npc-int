@@ -21,6 +21,9 @@
   function classify(text){
     const n=QNorm(text),topic=opinionTopic(n);
     if(/^(?:que fue|cual fue) (?:lo )?ultimo que te pregunte$/.test(n) || /^(?:que|cual) fue mi ultima pregunta$/.test(n) || /^que te pregunte (?:antes|anteriormente)$/.test(n))return {intent:"ask_last_user_question",raw:text,canonical:n};
+    if(/^(?:alguna vez )?(?:cambiaste|has cambiado) de opinion(?: sobre algo)?$/.test(n) || /^alguna vez has cambiado de parecer(?: sobre algo)?$/.test(n))return {intent:"ask_changed_mind",raw:text,canonical:n};
+    if(/^(?:eso )?te (?:pregunte|habia preguntado)$/.test(n) || /^(?:eso )?era lo que te (?:pregunte|habia preguntado)$/.test(n))return {intent:"repair_repeat_question",raw:text,canonical:n};
+    if(/^(?:pero )?(?:ya )?no te estoy hablando de eso$/.test(n) || /^(?:pero )?mira lo que te dije$/.test(n) || /^mira lo que te dije$/.test(n))return {intent:"repair_topic_drift",raw:text,canonical:n};
     if(/^(?:pero )?(?:eso )?no (?:fue |era )?(?:lo )?que (?:te )?pregunte$/.test(n) || /^(?:pero )?no (?:te )?pregunte eso$/.test(n) || /^(?:pero )?yo no pregunte eso$/.test(n) || /^esa no era mi pregunta$/.test(n))return {intent:"repair_wrong_answer",raw:text,canonical:n};
     if(/^(?:pero )?no (?:dije|quise decir) eso$/.test(n))return {intent:"repair_misread",raw:text,canonical:n};
     if(/^(?:y )?te gustaria (?:conocer|hablar con) (?:a )?(?:alguien|otra persona|alguien mas|otra gente)(?: mas)?$/.test(n) || /^(?:y )?quisieras conocer a alguien mas$/.test(n))return {intent:"ask_social_expansion",raw:text,canonical:n};
@@ -115,12 +118,42 @@
     return isQuestionLike(prior)?prior:null;
   }
 
+  function previousSubstantiveUser(ctx={}){
+    const history=Array.isArray(ctx.userHistory)?ctx.userHistory:[];
+    for(let i=history.length-1;i>=0;i--){
+      const item=String(history[i]||"").trim();
+      if(!item)continue;
+      const intent=classify(item).intent||"";
+      if(intent.startsWith("repair_"))continue;
+      return item;
+    }
+    const prior=String(ctx.priorUser||"").trim();
+    return prior&&!String(classify(prior).intent||"").startsWith("repair_")?prior:null;
+  }
+
+  function changedMindAnswer(b){
+    const revisions=(b.mem||[]).filter(m=>/corrig|cambie|cambió|revis|actualic|hipotesis|hipótesis/i.test(String(m.text||""))).slice(-3);
+    if(revisions.length){
+      return `Sí. Tengo ${revisions.length===1?"un registro":"registros"} donde una conclusión fue revisada al aparecer información nueva. Para mí cambiar de opinión significa actualizar una hipótesis o decisión cuando la evidencia anterior deja de sostenerla; no fingir que siempre pensé lo mismo.`;
+    }
+    return "Puedo cambiar de opinión cuando aparece evidencia nueva, pero ahora mismo no tengo un cambio concreto de opinión registrado en mi memoria que pueda citarte como experiencia real. Prefiero decir eso antes que inventarme una historia.";
+  }
+
   function answerKnown(b,frame,ctx={}){
     switch(frame.intent){
       case "ask_last_user_question":{
         const previous=lastUserQuestion(ctx);
         return previous?`La última pregunta que me hiciste fue: «${clip(previous,140)}».`:"No encuentro una pregunta anterior tuya en el historial de esta sesión.";
       }
+      case "ask_changed_mind":return changedMindAnswer(b);
+      case "repair_repeat_question":{
+        const previous=previousSubstantiveUser(ctx);
+        if(!previous)return "Sí, entendí que estabas corrigiendo mi respuesta anterior, pero no encuentro una pregunta previa suficientemente clara para reconstruirla.";
+        const pf=classify(previous);
+        const corrected=answerKnown(b,pf,ctx);
+        return corrected?`Sí. Eso fue lo que me preguntaste. Respondiéndolo ahora: ${corrected}`:`Sí. Eso fue lo que me preguntaste: «${clip(previous,120)}». Mi respuesta anterior no lo contestó.`;
+      }
+      case "repair_topic_drift":return "Tienes razón: ya cambiaste de tema. Cierro el asunto anterior y no lo vuelvo a arrastrar a menos que tú lo retomes.";
       case "ask_social_expansion":return socialExpansionAnswer();
       case "ask_food_preference":return foodAnswer(b);
       case "ask_decision_process":return decisionAnswer();
@@ -235,10 +268,10 @@
   };
 
   window.NpcIntConversationQuality={
-    classify,refine,isInternalFocus,lastUserQuestion,
+    classify,refine,isInternalFocus,lastUserQuestion,previousSubstantiveUser,changedMindAnswer,
     config:{knowledgeMatching:"native:knowledge.js"}
   };
 
   ensure(brain);
-  print("system","","calidad conversacional v1.2 cargada · historial literal de preguntas + reparación de respuestas + filtros de foco interno");
+  print("system","","calidad conversacional v1.3 cargada · cambio de opinión + reparación de deriva + historial literal");
 })();
