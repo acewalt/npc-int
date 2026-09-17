@@ -6,12 +6,14 @@ on:
     paths:
       - "*.js"
       - "tests/**"
+      - "config/**"
       - "index.html"
       - ".github/workflows/web-ci.yml"
   pull_request:
     paths:
       - "*.js"
       - "tests/**"
+      - "config/**"
       - "index.html"
       - ".github/workflows/web-ci.yml"
 
@@ -31,11 +33,24 @@ jobs:
             echo "Checking $file"
             node --check "$file"
           done
-      - name: Web cognition regression smoke tests
+      - name: Output safety smoke
+        run: node tests/output-safety-smoke.js
+      - name: Mental tuning config smoke
+        run: node tests/tuning-config-smoke.js
+      - name: Mental parity JS runner smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          node tests/mental-parity-js.js >/tmp/mental-parity-js.json
+          node -e 'const x=require("/tmp/mental-parity-js.json"); if(!x.results || x.results.length<1) process.exit(1); console.log(`mental parity JS scenarios: ${x.results.length}`)'
+      - name: Existing web cognition regression smoke tests
         shell: bash
         run: |
           set -euo pipefail
           for file in ./tests/*.js; do
+            case "$file" in
+              ./tests/output-safety-smoke.js|./tests/tuning-config-smoke.js|./tests/mental-parity-js.js) continue ;;
+            esac
             echo "Running $file"
             node "$file"
           done
