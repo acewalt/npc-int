@@ -254,9 +254,9 @@
     }
     try{
       const out=await q.generate(browserMessages(userText,symbolicDraft),{
-        maxNewTokens:220,
+        maxNewTokens:180,
         temperature:.55,
-        topK:30
+        topK:20
       });
       const text=String(out||"")
         .replace(/<think>[\s\S]*?<\/think>/gi,"")
@@ -356,7 +356,7 @@
       state.ready=selectedReady;
       print("debug","NEURAL>",
         `enabled=${state.enabled} | mode=${state.mode} | ready=${selectedReady} | backend=${state.backend||"—"} | model=${state.model||q?.modelId||"—"}\n`+
-        `qwen: webgpu=${q?.supported?"sí":"no"} | ready=${q?.ready?"sí":"no"} | loading=${q?.loading?"sí":"no"} | dtype=${q?.dtype||"—"} | progress=${Math.round(q?.progress||0)}%\n`+
+        `qwen: webgpu=${q?.supported?"sí":"no"} | ready=${q?.ready?"sí":"no"} | loading=${q?.loading?"sí":"no"} | dtype=${q?.dtype||"—"} | runtime=${q?.runtimeVersion||"—"} | inputTokens=${q?.lastInputTokens??"—"} | progress=${Math.round(q?.progress||0)}%\n`+
         `bridge: ready=${state.bridgeReady?"sí":"no"} | endpoint=${state.endpoint} | error=${state.lastError||q?.lastError||"—"}`
       );
       return;
