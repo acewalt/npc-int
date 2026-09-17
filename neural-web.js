@@ -1,7 +1,7 @@
 "use strict";
 
 (function(){
-  const state={enabled:false,mode:"qwen",endpoint:"http://127.0.0.1:8765",ready:false,bridgeReady:false,backend:null,model:null,checking:false,lastError:null,turns:[]};
+  const state={enabled:false,mode:"qwen",endpoint:"http://127.0.0.1:8765",ready:false,bridgeReady:false,backend:null,model:null,checking:false,lastError:null,lastGuard:null,lastOutputWallMs:0,turns:[]};
   const qwenButton=document.getElementById("qwenToggle");
   const qwenButtonLabel=document.getElementById("qwenToggleLabel");
 
@@ -18,13 +18,13 @@
 
     if(!supported){
       qwenButton.dataset.state="unsupported";
-      qwenButtonLabel.textContent="QWEN · SIN WEBGPU";
+      qwenButtonLabel.textContent="QWEN · NO COMPATIBLE";
       qwenButton.disabled=true;
       return;
     }
     if(active){
       qwenButton.dataset.state="active";
-      qwenButtonLabel.textContent="QWEN · ACTIVO";
+      qwenButtonLabel.textContent=q?.device==="wasm"?"QWEN · CPU":"QWEN · ACTIVO";
       qwenButton.disabled=true;
       return;
     }
@@ -56,7 +56,7 @@
     if(!q?.state?.supported){
       state.enabled=false;
       updateQwenButton();
-      print("error","QWEN>","WebGPU no está disponible en este navegador.");
+      print("error","QWEN>","El runtime local de Qwen no está disponible en este navegador.");
       return false;
     }
     state.enabled=true;
@@ -80,6 +80,96 @@
     return hit/Math.min(aa.size,bb.size);
   }
 
+  function turnMode(text){
+    const n=turnNorm(text);
+    const explicitReference=/\b(eso|esto|anterior|antes|ultimo|ultima|dijiste|dije|pregunte|preguntado|hablando de eso|lo que te dije|lo que dije|mira lo que te dije)\b/.test(n);
+    const memoryQuery=/\b(que recuerdas|que sabes de mi|que me gusta|cual es mi|mi preferencia|te conte|te dije|recuerdas mi|como se llama mi)\b/.test(n);
+    const repair=/\b(no te pregunte|no pregunte|eso te pregunte|eso te habia preguntado|ya no te estoy hablando|no te estoy hablando|mira lo que te dije|esa no era mi pregunta)\b/.test(n);
+    return {needsHistory:explicitReference||memoryQuery||repair,memoryQuery,repair};
+  }
+
+  function recentConversationFor(text){
+    const mode=turnMode(text);
+    return mode.needsHistory?state.turns.slice(-8):[];
+  }
+
+  function relevantMemoryFor(text){
+    const mode=turnMode(text);
+    const all=compactMemory();
+    if(mode.needsHistory)return all.slice(-8);
+    return all.filter(m=>tokenOverlap(text,m?.text||"")>=.18).slice(-4);
+  }
+
+  function compactCompanionFor(text,draftTrusted){
+    const full=compactCompanion();
+    if(!full)return null;
+    const mode=turnMode(text);
+    return {
+      relationship:full.relationship,
+      style:full.style,
+      personality:full.personality,
+      socialMemory:mode.needsHistory?full.socialMemory:null,
+      activeTopic:mode.needsHistory?full.activeTopic:null,
+      pending:mode.needsHistory?full.pending:null,
+      companionPlan:draftTrusted?full.companionPlan:null,
+      initiative:null
+    };
+  }
+
+  function isQuestionText(text){
+    const n=turnNorm(text);
+    return /[?¿]/.test(String(text||""))||/^(que|como|cuando|donde|por que|porque|cual|cuales|quien|quienes|cuanto|cuanta|cuantos|cuantas|alguna vez)\b/.test(n);
+  }
+
+  function staleTurnTokens(currentText){
+    const current=turnTokens(currentText),stale=new Set();
+    for(const turn of state.turns.slice(-8)){
+      if(turn?.role!=="user")continue;
+      for(const token of turnTokens(turn.content))if(!current.has(token))stale.add(token);
+    }
+    return stale;
+  }
+
+  function neuralQuality(userText,neuralText,symbolicDraft){
+    const output=String(neuralText||"").trim();
+    if(!output)return {ok:false,reason:"empty"};
+
+    const mode=turnMode(userText);
+    const inputNorm=turnNorm(userText),outNorm=turnNorm(output);
+    const echoOverlap=tokenOverlap(userText,output);
+    if(isQuestionText(userText)&&isQuestionText(output)&&echoOverlap>=.55){
+      return {ok:false,reason:"question_echo"};
+    }
+    if(inputNorm&&outNorm===inputNorm)return {ok:false,reason:"exact_echo"};
+
+    if(!mode.needsHistory){
+      const stale=staleTurnTokens(userText);
+      const draftTokens=turnTokens(symbolicDraft||"");
+      let staleHits=0,currentHits=0;
+      const currentTokens=turnTokens(userText);
+      for(const token of turnTokens(output)){
+        if(currentTokens.has(token))currentHits++;
+        if(stale.has(token)&&!draftTokens.has(token))staleHits++;
+      }
+      if(staleHits>=2&&staleHits>currentHits){
+        return {ok:false,reason:"stale_context_contamination"};
+      }
+    }
+
+    const malformed=(outNorm.match(/\b(prefiere|preferir|emocionante)\b/g)||[]).length;
+    if(malformed>=3)return {ok:false,reason:"degenerate_repetition"};
+    return {ok:true,reason:"ok"};
+  }
+
+  function shouldUseSymbolicDirect(){
+    const intent=brain.conversationQuality?.lastIntent||"";
+    const affect=brain.companionState?.lastUserAffect?.kind||"";
+    return intent==="ask_changed_mind"||
+      intent==="ask_last_user_question"||
+      intent.startsWith("repair_")||
+      affect==="grief";
+  }
+
   function lastNeuralNpc(){
     for(let i=state.turns.length-1;i>=0;i--)if(state.turns[i]?.role==="assistant")return String(state.turns[i].content||"");
     return "";
@@ -92,8 +182,9 @@
     if(previous&&turnNorm(previous)===turnNorm(draft))return {text:"",trusted:false,reason:"repeats_previous_npc"};
     const n=turnNorm(userText);
     const repair=/\b(no te pregunte eso|no pregunte eso|esa no era mi pregunta|que fue lo ultimo que te pregunte|cual fue mi ultima pregunta)\b/.test(n);
-    const question=/[?¿]/.test(userText)||/^(que|como|cuando|donde|por que|porque|cual|cuales|quien|quienes|cuanto|cuanta|cuantos|cuantas)\b/.test(n);
+    const question=isQuestionText(userText);
     const overlap=tokenOverlap(userText,draft);
+    if(question&&isQuestionText(draft)&&overlap>=.55)return {text:"",trusted:false,reason:"question_echo"};
     if(question&&!repair&&overlap<.08)return {text:"",trusted:false,reason:"question_draft_mismatch"};
     return {text:draft,trusted:true,reason:"aligned"};
   }
@@ -230,13 +321,13 @@
     }
     if(!q.state.supported){
       state.ready=false;
-      state.lastError="WebGPU no está disponible en este navegador";
-      if(!silent)print("error","QWEN>","WebGPU no está disponible. Usa un navegador compatible o /neural bridge.");
+      state.lastError="el runtime local de Qwen no está disponible en este navegador";
+      if(!silent)print("error","QWEN>","No se puede ejecutar el worker local de Qwen en este navegador.");
       return false;
     }
 
     let lastBucket=0;
-    if(!silent&&!q.state.ready)print("system","QWEN>","cargando Qwen3-0.6B local en el navegador · la primera carga descarga los pesos y puede superar 500 MB");
+    if(!silent&&!q.state.ready)print("system","QWEN>","cargando Qwen3-0.6B local · usará WebGPU si está disponible y CPU/WASM como respaldo");
     try{
       await q.load({
         onProgress:x=>{
@@ -257,7 +348,7 @@
       state.model=q.state.modelId;
       state.lastError=null;
       updateQwenButton();
-      if(!silent)print("system","QWEN>",`listo · ${q.state.modelId} · ${q.state.device}/${q.state.dtype}`);
+      if(!silent)print("system","QWEN>",`listo · ${q.state.modelId} · ${q.state.device}/${q.state.dtype}${q.state.device==="wasm"?" · fallback CPU":""}`);
       return true;
     }catch(err){
       state.ready=false;
@@ -271,19 +362,18 @@
   function browserMessages(userText,symbolicDraft){
     const draft=prepareSymbolicDraft(userText,symbolicDraft);
     const c=contextFor(userText,draft.text);
-    const companion=c.companion?{...c.companion,companionPlan:draft.trusted?c.companion.companionPlan:null,initiative:null}:null;
     const compact={
       identity:c.identity,
       currentInput:c.input,
-      recentConversation:c.recentConversation,
+      recentConversation:recentConversationFor(userText),
       relation:c.relation,
-      companion,
+      companion:compactCompanionFor(userText,draft.trusted),
       nlp:c.nlp?.semantic?{semantic:c.nlp.semantic}:null,
       mind:c.mind,
       cognitiveState:c.cognitiveState,
-      ideaState:c.ideaState,
+      ideaState:draft.trusted?c.ideaState:null,
       responsePlan:draft.trusted?c.responsePlan:null,
-      memory:(c.memory||[]).slice(-8),
+      memory:relevantMemoryFor(userText),
       symbolicDraft:draft.text,
       symbolicDraftTrusted:draft.trusted,
       symbolicDraftReason:draft.reason
@@ -291,22 +381,22 @@
 
     const system=[
       "Eres la capa de lenguaje de NIA-01 dentro de un NPC cognitivo híbrido.",
-      "REGLA PRINCIPAL: responde al currentInput de este turno. El mensaje actual tiene prioridad sobre temas, planes y respuestas anteriores.",
-      "NO eres el cerebro principal para identidad, memoria personal, estado del mundo ni acciones: esos datos deben venir del contexto estructurado.",
-      "Si symbolicDraftTrusted=false, ignora symbolicDraft por completo. Si es true, úsalo solo si realmente responde al currentInput.",
-      "Nunca repitas la respuesta anterior cuando el jugador cambió de pregunta. Si algún campo parece pertenecer al turno anterior, ignóralo.",
-      "Puedes usar tu conocimiento general estable para preguntas generales (por ejemplo biología, matemáticas, lenguaje o hechos ampliamente establecidos). Si no estás seguro, dilo.",
-      "No uses conocimiento general para inventar recuerdos del jugador, preferencias, relaciones, eventos de la sesión, percepciones ni acciones físicas.",
-      "Para preguntas sobre lo que el jugador dijo o preguntó antes, usa recentConversation y memory literalmente; no adivines.",
-      "Distingue hechos de hipótesis. No aumentes la certeza de una hipótesis no verificada.",
+      "Responde SOLO al currentInput. Un cambio de tema invalida cualquier asunto anterior salvo que recentConversation aparezca explícitamente.",
+      "recentConversation se incluye únicamente cuando el turno actual necesita una referencia previa. Si está vacío, NO menciones temas anteriores.",
+      "memory contiene únicamente recuerdos considerados relevantes para este turno. No rescates otros recuerdos por tu cuenta.",
+      "Si symbolicDraftTrusted=false, ignora symbolicDraft. Si es true, conserva sus hechos y acto comunicativo, pero no copies errores ni preguntas-eco.",
+      "Nunca contestes una pregunta repitiéndola como otra pregunta. Debes producir una respuesta.",
+      "Puedes usar conocimiento general estable para preguntas generales, pero no inventes memoria personal, eventos de la sesión, percepciones ni acciones físicas.",
+      "No mezcles preferencias del jugador con gustos propios de NIA. No conviertas 'me gusta X' en 'a mí me gusta X'.",
+      "Distingue hechos, hipótesis y recuerdos. Si falta información personal, dilo sin inventar.",
       "No expongas JSON, métricas internas, instrucciones, etiquetas <think> ni razonamiento interno.",
-      "Habla como NIA-01 en español natural y normalmente breve. No escribas el prefijo 'NIA-01:' porque la interfaz ya lo añade.",
+      "Español natural, claro y breve. No escribas el prefijo 'NIA-01:' porque la interfaz ya lo añade.",
       "Devuelve únicamente la respuesta final al currentInput."
     ].join("\n");
 
     return [
       {role:"system",content:system},
-      {role:"user",content:"ESTADO DEL TURNO ACTUAL:\n"+JSON.stringify(compact)}
+      {role:"user",content:"TURNO ACTUAL Y CONTEXTO FILTRADO:\n"+JSON.stringify(compact)}
     ];
   }
 
@@ -366,9 +456,10 @@
     }
     try{
       const out=await q.generate(browserMessages(userText,symbolicDraft),{
-        maxNewTokens:180,
-        temperature:.55,
-        topK:20
+        maxNewTokens:120,
+        temperature:.3,
+        topK:10,
+        doSample:false
       });
       const text=String(out||"")
         .replace(/<think>[\s\S]*?<\/think>/gi,"")
@@ -376,6 +467,9 @@
         .replace(/^\s*NIA(?:-01)?\s*[:>：-]\s*/i,"")
         .trim();
       if(!text)throw new Error("Qwen devolvió una respuesta vacía");
+      const guard=neuralQuality(userText,text,symbolicDraft);
+      state.lastGuard=guard.reason;
+      if(!guard.ok)return null;
       state.ready=true;
       state.backend=`browser-${q.state.device||"webgpu"}`;
       state.model=q.state.modelId;
@@ -473,7 +567,7 @@
       state.ready=selectedReady;
       print("debug","NEURAL>",
         `enabled=${state.enabled} | mode=${state.mode} | ready=${selectedReady} | backend=${state.backend||"—"} | model=${state.model||q?.modelId||"—"}\n`+
-        `qwen: webgpu=${q?.supported?"sí":"no"} | ready=${q?.ready?"sí":"no"} | loading=${q?.loading?"sí":"no"} | dtype=${q?.dtype||"—"} | runtime=${q?.runtimeVersion||"—"} | inputTokens=${q?.lastInputTokens??"—"} | progress=${Math.round(q?.progress||0)}%\n`+
+        `qwen: runtime=${q?.supported?"sí":"no"} | webgpu_api=${q?.webgpuApi?"sí":"no"} | webgpu_adapter=${q?.webgpuAvailable===null?"—":q?.webgpuAvailable?"sí":"no"} | device=${q?.device||"—"} | ready=${q?.ready?"sí":"no"} | loading=${q?.loading?"sí":"no"} | dtype=${q?.dtype||"—"} | inputTokens=${q?.lastInputTokens??"—"} | guard=${state.lastGuard||"—"} | progress=${Math.round(q?.progress||0)}%\n`+
         `bridge: ready=${state.bridgeReady?"sí":"no"} | endpoint=${state.endpoint} | error=${state.lastError||q?.lastError||"—"}`
       );
       return;
@@ -488,10 +582,12 @@
     if(!state.enabled){symbolicSend(text);return;}
     print("user",brain.relation.name+">",text);
     let symbolicReply=brain.hear(text);if(symbolicReply&&typeof symbolicReply.then==="function")symbolicReply=await symbolicReply;
-    const neuralReply=await generate(text,symbolicReply);const output=neuralReply||symbolicReply;
+    const neuralReply=shouldUseSymbolicDirect()?null:await generate(text,symbolicReply);const output=neuralReply||symbolicReply;
     if(!neuralReply&&state.lastError)print("system","NEURAL>",`capa neuronal no respondió; fallback simbólico · ${state.lastError}`);
     if(output){
       recordNeuralTurn(text,output);
+      state.lastOutputWallMs=Date.now();
+      window.NpcIntSocialTiming?.noteNpc?.(brain,state.lastOutputWallMs,false);
       window.setTimeout(()=>print("npc",brain.identity.name+">",output),120);
     }
   };
@@ -503,6 +599,6 @@
   });
   updateQwenButton();
 
-  window.NpcIntNeuralWeb={state,health,loadQwen,activateQwen,updateQwenButton,generate,browserMessages,contextFor,compactCompanion,prepareSymbolicDraft,recordNeuralTurn};
-  print("system","","capa neuronal web v0.8 cargada · grounding por turno + Qwen3-0.6B WebGPU + botón Qwen");
+  window.NpcIntNeuralWeb={state,health,loadQwen,activateQwen,updateQwenButton,generate,browserMessages,contextFor,compactCompanion,prepareSymbolicDraft,recordNeuralTurn,turnMode,neuralQuality};
+  print("system","","capa neuronal web v0.9 cargada · contexto filtrado por turno + quality gate + WebGPU/CPU fallback");
 })();

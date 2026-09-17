@@ -2,8 +2,10 @@
 
 (function(){
   const state={
-    version:"1.1",
-    supported:typeof navigator!=="undefined"&&!!navigator.gpu,
+    version:"1.2",
+    supported:typeof Worker!=="undefined",
+    webgpuApi:typeof navigator!=="undefined"&&!!navigator.gpu,
+    webgpuAvailable:null,
     ready:false,
     loading:false,
     generating:false,
@@ -34,7 +36,7 @@
 
   function ensureWorker(){
     if(worker)return worker;
-    if(!state.supported)throw new Error("WebGPU no está disponible en este navegador.");
+    if(!state.supported)throw new Error("Este navegador no permite ejecutar el worker local de Qwen.");
 
     worker=new Worker(new URL("./qwen-worker.js",document.baseURI),{type:"module"});
 
@@ -43,6 +45,14 @@
 
       if(msg.status==="loading"){
         state.loading=true;
+        return;
+      }
+
+      if(msg.status==="backend"||msg.status==="fallback"){
+        state.device=msg.device||state.device;
+        state.dtype=msg.dtype||state.dtype;
+        state.webgpuAvailable=msg.webgpuAvailable??state.webgpuAvailable;
+        state.fallbackReason=msg.reason||null;
         return;
       }
 
@@ -64,6 +74,7 @@
         state.device=msg.device||state.device;
         state.modelId=msg.modelId||state.modelId;
         state.runtimeVersion=msg.runtimeVersion||state.runtimeVersion;
+        state.webgpuAvailable=msg.webgpuAvailable??(state.device==="webgpu");
         state.lastError=null;
         if(loadResolve)loadResolve(state);
         loadResolve=null;
@@ -166,7 +177,8 @@
       messages:Array.isArray(messages)?messages:[],
       maxNewTokens:Math.max(32,Math.min(384,Number(options.maxNewTokens)||180)),
       temperature:Math.max(0.05,Math.min(1.5,Number(options.temperature)||0.55)),
-      topK:Math.max(1,Math.min(100,Number(options.topK)||20))
+      topK:Math.max(1,Math.min(100,Number(options.topK)||20)),
+      doSample:options.doSample!==false
     };
 
     return new Promise((resolve,reject)=>{
@@ -194,6 +206,8 @@
     state.progressFile=null;
     state.dtype=null;
     state.runtimeVersion=null;
+    state.webgpuAvailable=null;
+    state.fallbackReason=null;
     state.lastInputTokens=null;
     state.lastError=null;
   }

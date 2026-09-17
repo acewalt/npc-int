@@ -73,6 +73,24 @@ r=b.hear("Habla conmigo");
 assert.match(r,/podemos hablar|conversar|hablemos/i);
 assert.doesNotMatch(r,/no me dejes|solo me tienes|me necesitas/i);
 
+// Una preferencia de color nueva reemplaza la anterior para esa categoría.
+r=b.hear("Me gusta el color rojo");
+assert.match(r,/color rojo/i);
+r=b.hear("Me gusta el color azul");
+assert.match(r,/color azul/i);
+r=b.hear("Que color me gusta");
+assert.match(r,/azul/i);
+assert.doesNotMatch(r,/rojo/i);
+const activeColors=window.NpcIntSocialMemory.profile(b).likes.filter(x=>x.slot==="color");
+assert.strictEqual(activeColors.length,1);
+assert.match(activeColors[0].value,/azul/i);
+
+// La pérdida de una mascota se trata como duelo, no como entusiasmo.
+r=b.hear("ayer creo que mi perro murió");
+assert.match(r,/lo siento|muy reciente/i);
+assert.doesNotMatch(r,/emocionante/i);
+assert.strictEqual(b.companionState.lastUserAffect.kind,"grief");
+
 // Regresión del transcript real: preguntas sobre NIA no deben convertirse en temas.
 const topicCount=b.topicManager.topics.length;
 r=b.hear("cual es tu proposito");
@@ -107,6 +125,15 @@ const remembered=window.NpcIntSocialMemory.profile(b2);
 assert.ok(remembered.likes.some(x=>/World of Warcraft/i.test(x.value)),"la preferencia debe sobrevivir una recarga local");
 assert.ok(remembered.projects.some(x=>/juego de tres carriles/i.test(x.value)),"el proyecto debe sobrevivir una recarga local");
 assert.ok(!b2.topicManager.topics.some(x=>/cual es tu proposito|que te gustaria hacer/i.test(x.label)),"restore debe limpiar temas meta de versiones anteriores");
+
+// Mientras Qwen carga o genera, la iniciativa autónoma queda silenciada.
+window.NpcIntQwenBrowser={state:{loading:true,generating:false}};
+b.conversationArbiter={lastUserWallMs:0};
+assert.strictEqual(b.tick(2),null);
+window.NpcIntQwenBrowser.state.loading=false;
+window.NpcIntQwenBrowser.state.generating=true;
+assert.strictEqual(b.tick(2),null);
+window.NpcIntQwenBrowser.state.generating=false;
 
 // Iniciativa: no debe hablar justo después del usuario, pero sí puede retomar
 // un pendiente cuando ha pasado suficiente tiempo real y el contenido tiene valor.

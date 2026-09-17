@@ -24,6 +24,7 @@
     else if(/\b(te caigo bien|que piensas de mi|como va nuestra relacion|somos amigos|me consideras amigo|me conoces)\b/.test(n))intent="ask_relationship";
     else if(/\b(habla conmigo|acompaname|acompañame|quiero hablar contigo|quedate hablando|conversemos|charlemos|estoy aburrido)\b/.test(n))intent="request_company";
     else if(/^(que hacemos|que podemos hacer|hacemos algo|que hacemos juntos|que propones hacer|que se te ocurre hacer juntos)(?: .*)?$/.test(n))intent="ask_shared_activity";
+    else if(/^(?:que|cual) color (?:me gusta|prefiero)(?: a mi)?$/.test(n) || /^cual es mi color favorito$/.test(n))intent="ask_user_color_preference";
     else if(/^(que recuerdas de mi|que sabes de mi|que conoces de mi|te acuerdas de mi)(?: .*)?$/.test(n))intent="ask_social_memory";
     return {raw:text,canonical:n,intent};
   }
@@ -40,6 +41,12 @@
   function personalityAnswer(b){
     const p=window.NpcIntPersonality?.ensure?.(b);
     return `Como personaje soy curiosa y bastante observadora, pero también prudente: me gusta investigar antes de afirmar algo. Suelo preferir resolver problemas, probar ideas y cambiar de opinión cuando aparece evidencia nueva. No quiero llenar cada silencio; si no tengo nada útil que aportar, prefiero esperar.`;
+  }
+
+  function colorPreferenceAnswer(b){
+    const p=window.NpcIntSocialMemory?.profile?.(b);
+    const color=[...(p?.likes||[]),...(p?.preferences||[])].find(x=>x.slot==="color"&&x.active!==false);
+    return color?`Lo último que me dijiste sobre tu color es que te gusta «${color.value}».`:"No tengo una preferencia de color tuya registrada con suficiente claridad.";
   }
 
   function memoryAnswer(b){
@@ -71,7 +78,7 @@
   }
 
   function greetingAnswer(b){
-    const r=window.NpcIntRelationship?.ensure?.(b)||{},pending=window.NpcIntPending?.best?.(b),profile=window.NpcIntSocialMemory?.profile?.(b);
+    const r=window.NpcIntRelationship?.ensure?.(b)||{},rawPending=window.NpcIntPending?.best?.(b),pending=rawPending?.kind==="question"?null:rawPending,profile=window.NpcIntSocialMemory?.profile?.(b);
     const name=profile?.name&&profile.name!=="Jugador"?profile.name:null;
     if((r.stage==="familiar"||r.stage==="cercano")&&pending)return `${name?`Ey, ${name}.`:"Ey."} Me acuerdo de que dejamos «${clip(pending.text,62)}» pendiente. Podemos retomarlo cuando quieras.`;
     if(r.stage==="familiar"||r.stage==="cercano")return name?`Ey, ${name}. Qué bueno volver a coincidir. ¿Qué traes hoy?`:"Ey. Qué bueno volver a coincidir. ¿Qué traes hoy?";
@@ -130,6 +137,7 @@
       case "ask_relationship":return relationDescription(b);
       case "request_company":return companyAnswer(b);
       case "ask_shared_activity":return sharedActivity(b);
+      case "ask_user_color_preference":return colorPreferenceAnswer(b);
       case "ask_social_memory":return memoryAnswer(b);
       default:return disclosureResponse(b,added,lower)||maybeWeaveMemory(b,frame.raw,softenFallback(lower),frame.intent,added);
     }
@@ -179,6 +187,10 @@
 
       // El árbitro ya registra la última interacción humana. La iniciativa no debe
       // saltarse esa ventana y hablar encima de una conversación activa.
+      const neuralState=window.NpcIntQwenBrowser?.state;
+      if(neuralState?.loading||neuralState?.generating)return null;
+      const lastNeuralOutput=Number(window.NpcIntNeuralWeb?.state?.lastOutputWallMs||0);
+      if(lastNeuralOutput&&now-lastNeuralOutput<60000)return null;
       const lastUser=Number(this.conversationArbiter?.lastUserWallMs||0);
       if(lastUser&&now-lastUser<60000)return null;
 
@@ -215,6 +227,6 @@
   };
 
   ensure(brain);
-  window.NpcIntCompanion={ensure,classify,socialReply,status,greetingAnswer,sharedActivity,memoryAnswer};
-  print("system","","companion engine v1.1 cargado · relación + memoria social + iniciativa con ventana conversacional + continuidad");
+  window.NpcIntCompanion={ensure,classify,socialReply,status,greetingAnswer,sharedActivity,memoryAnswer,colorPreferenceAnswer};
+  print("system","","companion engine v1.2 cargado · preferencias recientes + iniciativa bloqueada durante Qwen + continuidad");
 })();
