@@ -211,9 +211,9 @@ async function runGeneration(data,requestId){
 
   await model.generate({
     ...inputs,
-    do_sample:true,
-    temperature:Number(data?.temperature)||0.55,
-    top_k:Number(data?.topK)||20,
+    do_sample:data?.doSample!==false,
+    temperature:Number(data?.temperature)||0.3,
+    top_k:Number(data?.topK)||10,
     max_new_tokens:Number(data?.maxNewTokens)||180,
     streamer,
     stopping_criteria:stoppingCriteria,
