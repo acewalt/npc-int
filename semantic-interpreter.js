@@ -56,7 +56,7 @@
 
   function understandingRefersBack(normalized){
     return /^(?:me )?(?:entiendes|comprendes)$/.test(normalized)
-      || /^que (?:entendiste|comprendiste)$/.test(normalized)
+      || /^que (?:entiendes|comprendes|entendiste|comprendiste)$/.test(normalized)
       || /\b(?:esto|eso|lo anterior|lo que dije|lo que te dije|mi mensaje)\b/.test(normalized);
   }
 
@@ -110,10 +110,14 @@
     }
     else if(isQ && any("estar","sentir") && target2 && q.includes("como")){intent="ask_state";confidence=.94;basis=["question","state","cómo"];}
     else if(isQ && any("pasar","ocurrir")){intent="ask_situation";confidence=.93;basis=["question","situation"];}
-    else if(isQ && ws.includes("informacion") && (ws.includes("para")||ws.includes("por"))){intent="ask_information_purpose";confidence=.88;basis=["information-purpose"];}
-    else if(isQ && (normalized.startsWith("por que ")||normalized.startsWith("porque ")) && any("decir","responder","hablar")){intent="ask_reason";confidence=.9;basis=["why","speech-verb"];}
-    else if(isQ && q.includes("como") && any("estar")){intent="ask_state";confidence=.76;basis=["question","cómo","estar"];}
-    else if(isQ && normalized==="que pasa"){intent="ask_situation";confidence=.96;basis=["fixed-question"];}
+    else if(isQ && ws.includes("informacion") && (ws.includes("para")||ws.includes("por"))){intent="ask_information_purpose";confidence=.88;basis=["information-purpose"];
+    }
+    else if(isQ && (normalized.startsWith("por que ")||normalized.startsWith("porque ")) && any("decir","responder","hablar")){intent="ask_reason";confidence=.9;basis=["why","speech-verb"];
+    }
+    else if(isQ && q.includes("como") && any("estar")){intent="ask_state";confidence=.76;basis=["question","cómo","estar"];
+    }
+    else if(isQ && normalized==="que pasa"){intent="ask_situation";confidence=.96;basis=["fixed-question"];
+    }
 
     return {intent,confidence,basis,topic};
   }
