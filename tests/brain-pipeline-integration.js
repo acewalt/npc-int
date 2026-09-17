@@ -134,9 +134,11 @@ async function main(){
 function fakeElement(tag="div"){
   const element={
     tagName:String(tag).toUpperCase(),children:[],className:"",textContent:"",value:"",
-    scrollTop:0,scrollHeight:0,style:{},dataset:{},
+    scrollTop:0,scrollHeight:0,style:{},dataset:{},attributes:{},disabled:false,
     appendChild(child){this.children.push(child);this.scrollHeight=this.children.length;return child;},
-    addEventListener(){},focus(){}
+    addEventListener(){},focus(){},
+    setAttribute(name,value){this.attributes[String(name)]=String(value);},
+    getAttribute(name){return this.attributes[String(name)]??null;}
   };
   let html="";
   Object.defineProperty(element,"innerHTML",{
@@ -190,6 +192,8 @@ async function verifyCompleteBrowserOrder(){
 
   const fullPipeline=browser.NpcIntPipeline;
   assert.ok(fullPipeline?.state.installed,"el pipeline debe seguir instalado tras cargar todo index.html");
+  assert.strictEqual(vm.runInContext('NpcIntNeuralWeb.turnMode("que te gustaria crear una mision").needsHistory',browser),false,"un tema nuevo no debe heredar historial neural");
+  assert.strictEqual(vm.runInContext('NpcIntNeuralWeb.turnMode("eso te habia preguntado?").needsHistory',browser),true,"una referencia explícita sí debe habilitar historial");
   const beforeHear=fullPipeline.state.trace.length;
   await Promise.resolve(vm.runInContext('brain.hear("me interesa construir un juego en Unity")',browser));
   assert.strictEqual(fullPipeline.state.trace.length,beforeHear+1,"el hear final debe atravesar dispatch aunque wrappers posteriores lo envuelvan");
