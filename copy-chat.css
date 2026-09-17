@@ -39,3 +39,48 @@
   .copy-chat-button{gap:4px;padding:0 6px}
   .status{font-size:8.5px}
 }
+
+.qwen-toggle-button{
+  flex:0 0 auto;
+  height:28px;
+  padding:0 9px;
+  border:1px solid #315344;
+  border-radius:6px;
+  background:#0a1610;
+  color:#9ab6a5;
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  cursor:pointer;
+  font-size:10px;
+  line-height:1;
+  white-space:nowrap;
+  transition:background .15s,border-color .15s,color .15s,opacity .15s;
+}
+.qwen-toggle-button:hover:not(:disabled){background:#10271a;border-color:#3d7451;color:var(--green)}
+.qwen-toggle-button:focus-visible{outline:1px solid var(--green);outline-offset:2px}
+.qwen-toggle-button:disabled{cursor:default;opacity:.88}
+.qwen-toggle-dot{width:7px;height:7px;flex:0 0 7px;border-radius:50%;background:#557064;box-shadow:none}
+.qwen-toggle-button[data-state="loading"]{border-color:#7b6634;color:var(--amber);background:#1b1609}
+.qwen-toggle-button[data-state="loading"] .qwen-toggle-dot{background:var(--amber);box-shadow:0 0 9px rgba(255,198,109,.6);animation:qwen-pulse 1s ease-in-out infinite}
+.qwen-toggle-button[data-state="ready"]{border-color:#356748;color:#a6d7b6}
+.qwen-toggle-button[data-state="ready"] .qwen-toggle-dot{background:#6ba982}
+.qwen-toggle-button[data-state="active"]{border-color:#3b8f59;background:#0f2b18;color:var(--green)}
+.qwen-toggle-button[data-state="active"] .qwen-toggle-dot{background:var(--green);box-shadow:0 0 10px rgba(112,255,159,.72)}
+.qwen-toggle-button[data-state="error"]{border-color:#7a363c;color:var(--red);background:#241013}
+.qwen-toggle-button[data-state="error"] .qwen-toggle-dot{background:var(--red)}
+.qwen-toggle-button[data-state="unsupported"]{opacity:.55;cursor:not-allowed}
+@keyframes qwen-pulse{50%{opacity:.4}}
+
+@media(max-width:700px){
+  .qwen-toggle-button{height:26px;padding:0 7px;font-size:9px}
+}
+
+@media(max-width:520px){
+  .qwen-toggle-button{padding:0 6px}
+  #qwenToggleLabel{font-size:0}
+  #qwenToggleLabel::after{content:"QWEN";font-size:9px}
+  .qwen-toggle-button[data-state="loading"] #qwenToggleLabel::after{content:"QWEN…"}
+  .qwen-toggle-button[data-state="active"] #qwenToggleLabel::after{content:"QWEN ✓"}
+  .qwen-toggle-button[data-state="error"] #qwenToggleLabel::after{content:"QWEN !"}
+}
