@@ -63,7 +63,7 @@ const b=global.brain;
 let out=b.hear("hola");
 assert.match(out,/hola|cuéntame|traes/i);
 
-out=b.hear("cuando tenia 8 años, se me murió un perro llamado Junior");
+out=b.hear("cuando tenia yo 8 años, se me murió un perro llamado Junior");
 assert.match(out,/Junior/i);
 assert.match(out,/8 años/i);
 assert.doesNotMatch(out,/ayer|reciente/i);
