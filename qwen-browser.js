@@ -177,7 +177,8 @@
       messages:Array.isArray(messages)?messages:[],
       maxNewTokens:Math.max(32,Math.min(384,Number(options.maxNewTokens)||180)),
       temperature:Math.max(0.05,Math.min(1.5,Number(options.temperature)||0.55)),
-      topK:Math.max(1,Math.min(100,Number(options.topK)||20))
+      topK:Math.max(1,Math.min(100,Number(options.topK)||20)),
+      doSample:options.doSample!==false
     };
 
     return new Promise((resolve,reject)=>{
