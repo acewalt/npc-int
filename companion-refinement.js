@@ -49,7 +49,7 @@
     const name=data.name||null;
     const when=data.when||null;
     if(when?.type==="user_age"&&Number.isFinite(Number(when.age))){
-      return `Lo siento. Me dijiste que ${name?name+" ":"tu mascota "}murió cuando tenías ${Number(when.age)} años. Lo voy a recordar con ese contexto, sin tratarlo como algo que pasó recientemente.`;
+      return `Lo siento. Me dijiste que ${name?name+" ":"tu mascota "}murió cuando tenías ${Number(when.age)} años. Lo voy a recordar con ese contexto temporal.`;
     }
     if(when?.type==="relative"&&when.value==="ayer"){
       return `Lo siento. Me dijiste que ${name?name+" ":"tu mascota "}murió ayer. Es algo reciente; si quieres hablar de lo que pasó, te escucho, y si prefieres cambiar de tema, también está bien.`;
