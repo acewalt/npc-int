@@ -1,0 +1,60 @@
+name: Validate JS C# decision parity
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "mental-cycle.js"
+      - "src/NpcInt.Core/**"
+      - "tests/parity/**"
+      - "tests/mental-parity-js.js"
+      - "tests/NpcInt.Core.ParitySmoke/**"
+      - ".github/workflows/parity-ci.yml"
+  pull_request:
+    paths:
+      - "mental-cycle.js"
+      - "src/NpcInt.Core/**"
+      - "tests/parity/**"
+      - "tests/mental-parity-js.js"
+      - "tests/NpcInt.Core.ParitySmoke/**"
+      - ".github/workflows/parity-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  parity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "8.0.x"
+      - name: Run JavaScript reference scenarios
+        run: node tests/mental-parity-js.js > /tmp/mental-js.json
+      - name: Run C# reference scenarios
+        run: dotnet run --project tests/NpcInt.Core.ParitySmoke/NpcInt.Core.ParitySmoke.csproj --configuration Release -- tests/parity/mental-scenarios.json > /tmp/mental-cs.json
+      - name: Compare normalized decisions
+        shell: python
+        run: |
+          import json
+          js=json.load(open('/tmp/mental-js.json',encoding='utf-8'))
+          cs=json.load(open('/tmp/mental-cs.json',encoding='utf-8'))
+          a={x['id']:x for x in js['results']}
+          b={x['id']:x for x in cs['results']}
+          errors=[]
+          if set(a)!=set(b):
+              errors.append(f"scenario ids differ: js={sorted(a)} cs={sorted(b)}")
+          for sid in sorted(set(a)&set(b)):
+              for field in ('decision','topGoal','tags'):
+                  if a[sid].get(field)!=b[sid].get(field):
+                      errors.append(f"{sid}.{field}: js={a[sid].get(field)!r} cs={b[sid].get(field)!r}")
+          print('JS:',json.dumps(js,ensure_ascii=False,indent=2))
+          print('C#:',json.dumps(cs,ensure_ascii=False,indent=2))
+          if errors:
+              raise SystemExit('Mental parity failed:\n- '+'\n- '.join(errors))
+          print(f"Mental parity: {len(a)} scenarios matched")
