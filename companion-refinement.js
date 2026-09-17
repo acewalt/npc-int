@@ -15,8 +15,15 @@
     return null;
   }
 
-  function classify(text){
-    const n=norm(text),affect=detectAffect(text);
+  function classify(text,b=null){
+    const n=norm(text);
+    const central=b?window.NpcIntIntentRouter?.currentFor?.(b,text):null;
+    if(central&&window.NpcIntIntentRouter?.authoritative?.(central)){
+      const routed=central.routes?.refinement||null;
+      const affect=routed==="express_grief"?{kind:"grief",confidence:central.confidence||.95}:null;
+      return {intent:routed,affect,asksProposal:false,centralIntent:central.intent,source:"intent-router"};
+    }
+    const affect=detectAffect(text);
     if(affect?.kind==="grief")return {intent:"express_grief",affect,asksProposal:false};
     if(affect?.kind==="loneliness")return {intent:"express_loneliness",affect,asksProposal:/\b(?:que propones|que hacemos|que podria hacer|que hacemos ahora)\b/.test(n)};
     if(affect?.kind==="low_mood")return {intent:"express_low_mood",affect,asksProposal:/\b(?:que propones|que hago|que hacemos)\b/.test(n)};
@@ -105,7 +112,7 @@
 
   const oldHear=NpcBrain.prototype.hear;
   NpcBrain.prototype.hear=function(text){
-    const frame=classify(text),lower=oldHear.call(this,text);
+    const frame=classify(text,this),lower=oldHear.call(this,text);
     const finish=lowerReply=>{
       registerTransientState(this,frame);
       const refined=answer(this,frame);
@@ -121,5 +128,5 @@
   };
 
   window.NpcIntCompanionRefinement={classify,detectAffect,answer,desiredActivityAnswer,meaningfulThread,griefAnswer};
-  print("system","","companion refinement v1.2 cargado · duelo con contexto temporal + estados transitorios + propuestas");
+  print("system","","companion refinement v1.3 cargado · intención central + duelo temporal + estados transitorios");
 })();
