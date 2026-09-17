@@ -301,7 +301,18 @@
   const oldHear=NpcBrain.prototype.hear;
   NpcBrain.prototype.hear=function(text){
     ensureUnderstanding(this);
-    const f=classify((text||"").trim(),this);
+    const raw=(text||"").trim();
+    const central=window.NpcIntIntentRouter?.currentFor?.(this,raw);
+    if(central&&window.NpcIntIntentRouter?.authoritative?.(central)&&!central.routes?.understanding){
+      return oldHear.call(this,text);
+    }
+    const f=classify(raw,this);
+    if(central&&window.NpcIntIntentRouter?.authoritative?.(central)&&central.routes?.understanding){
+      f.intent=central.routes.understanding;
+      f.source="intent-router";
+      f.confidence=central.confidence;
+      if(central.slots?.topic&&!f.topic)f.topic=central.slots.topic;
+    }
     this.understanding.lastFrame=f;
     this.understanding.lastCanonical=f.canonical;
     this.understanding.lastRepair=f.repaired.slice();
@@ -363,5 +374,5 @@
 
   ensureUnderstanding(brain);
   window.NpcIntUnderstanding={canonical,classify,conceptUnderstandingTopic,selfRelativeTopic,preferenceTopic};
-  print("system","","comprensión v1.2 cargada · tema explícito antes de anáfora · NLP semántico + introspección");
+  print("system","","comprensión v1.3 cargada · análisis semántico subordinado al intent router");
 })();

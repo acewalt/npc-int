@@ -50,7 +50,7 @@
     if(!asksQuestion&&/\b(?:murio|fallecio|se murio)\b/.test(n)&&/\b(?:perro|perra|gato|gata|mascota)\b/.test(n)){
       const species=(n.match(/\b(perro|perra|gato|gata|mascota)\b/)||[])[1]||"mascota";
       const nameMatch=raw.match(/\b(?:llamad[oa]|se llamaba|de nombre)\s+([A-Za-zÁÉÍÓÚÜÑáéíóúüñ][\wÁÉÍÓÚÜÑáéíóúüñ-]{1,40})/i);
-      const ageMatch=n.match(/\bcuando tenia\s+(\d{1,2})\s+anos?\b/)||n.match(/\ba los\s+(\d{1,2})\s+anos?\b/);
+      const ageMatch=n.match(/\bcuando (?:yo )?tenia(?: yo)?\s+(\d{1,2})\s+anos?\b/)||n.match(/\b(?:yo )?tenia(?: yo)?\s+(\d{1,2})\s+anos?\b/)||n.match(/\ba los\s+(\d{1,2})\s+anos?\b/);
       const name=nameMatch?nameMatch[1]:null;
       const age=ageMatch?Number(ageMatch[1]):null;
       const relative=/\bayer\b/.test(n)?"ayer":/\bhoy\b/.test(n)?"hoy":null;
@@ -64,6 +64,7 @@
       });
     }
 
+    if((m=raw.match(/\bmi color favorito es\s+(?:el |la )?([A-Za-zÁÉÍÓÚÜÑáéíóúüñ-]{2,30})/i)))push("preference",`color ${m[1]}`,.82,["preference","color"]);
     if((m=raw.match(/\bno me gusta(?:n)?\s+(.{2,120})/i)))push("dislike",m[1],.66,["preference"]);
     else if((m=raw.match(/\bme gusta(?:n)?\s+(.{2,120})/i)))push("like",m[1],.66,["preference"]);
     if((m=raw.match(/\bprefiero\s+(.{2,120})/i)))push("preference",m[1],.70,["preference"]);
@@ -123,5 +124,5 @@
   function format(b){const p=profile(b),s=ensure(b);const rows=s.items.slice(-12).map(x=>`#${x.id} [${x.kind}] ${x.value} · imp=${x.importance.toFixed(2)} · menciones=${x.mentions}`);return [`persona=${p.name}`,`recuerdos sociales=${s.items.length}`,...rows].join("\n");}
 
   window.NpcIntSocialMemory={ensure,add,extract,noteTurn,recall,profile,snapshot,restore,clear,format,slotOf,latestPet};
-  print("system","","memoria social v1.2 cargada · mascotas estructuradas + preferencias por categoría + recencia");
+  print("system","","memoria social v1.4 cargada · preferencias declarativas + tiempo autobiográfico flexible + mascotas");
 })();

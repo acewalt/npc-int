@@ -14,6 +14,18 @@
     if(typeof b.cognition.loaded!=="boolean")b.cognition.loaded=false;
   }
 
+  function routedFrame(b,text){
+    try{return window.NpcIntIntentRouter?.currentFor?.(b,text)||null;}catch(_){return null;}
+  }
+
+  function objectiveSubject(subject){
+    const n=CNorm(subject);
+    if(!n)return false;
+    if(/^(yo|me|mi|mis|nosotros|nosotras|tu|tus|usted|ustedes)\b/.test(n))return false;
+    if(/\b(color favorito|preferencia|gusto|nombre|mi perro|mi mascota)\b/.test(n))return false;
+    return n.length>=2;
+  }
+
   function addFact(b,subject,predicate,object,confidence=.72,source="conversation",derived=false){
     ensureCognition(b);
     subject=cleanEntity(subject); object=cleanEntity(object);
@@ -44,14 +56,18 @@
     const raw=(text||"").trim();
     if(!raw||/[?¿]$/.test(raw))return out;
 
+    const route=routedFrame(b,raw);
+    const authoritative=window.NpcIntIntentRouter?.authoritative?.(route);
+    if(authoritative && route.routes?.cognition!=="fact_statement")return out;
+
     let m;
-    if((m=raw.match(/^tengo\s+(.+)$/i)))out.push(addFact(b,b.relation?.name||"Jugador","tiene",m[1],.82));
-    if((m=raw.match(/^(.+?)\s+(?:tiene|tienen)\s+(.+)$/i)))out.push(addFact(b,m[1],"tiene",m[2],.78));
-    if((m=raw.match(/^(.+?)\s+(?:está|esta|están|estan)\s+(.+)$/i)))out.push(addFact(b,m[1],"estado",m[2],.80));
-    if((m=raw.match(/^(.+?)\s+(?:es|son)\s+(.+)$/i)))out.push(addFact(b,m[1],"es",m[2],.74));
-    if((m=raw.match(/^(.+?)\s+(?:necesita|necesitan)\s+(.+)$/i)))out.push(addFact(b,m[1],"necesita",m[2],.78));
-    if((m=raw.match(/^(.+?)\s+(?:abre|abren)\s+(.+)$/i)))out.push(addFact(b,m[1],"sirve_para",`abrir ${m[2]}`,.80));
-    if((m=raw.match(/^(.+?)\s+(?:causa|provoca|produce)\s+(.+)$/i)))out.push(addFact(b,m[1],"puede_causar",m[2],.72));
+    if((m=raw.match(/^tengo\s+(.+)$/i)) && !authoritative)out.push(addFact(b,b.relation?.name||"Jugador","tiene",m[1],.82,"conversation-state"));
+    if((m=raw.match(/^(.+?)\s+(?:tiene|tienen)\s+(.+)$/i)) && objectiveSubject(m[1]))out.push(addFact(b,m[1],"tiene",m[2],.78,"conversation-objective"));
+    if((m=raw.match(/^(.+?)\s+(?:está|esta|están|estan)\s+(.+)$/i)) && objectiveSubject(m[1]))out.push(addFact(b,m[1],"estado",m[2],.80,"conversation-objective"));
+    if((m=raw.match(/^(.+?)\s+(?:es|son)\s+(.+)$/i)) && objectiveSubject(m[1]) && (!route || route.intent==="fact_statement"))out.push(addFact(b,m[1],"es",m[2],.74,"conversation-objective"));
+    if((m=raw.match(/^(.+?)\s+(?:necesita|necesitan)\s+(.+)$/i)) && objectiveSubject(m[1]))out.push(addFact(b,m[1],"necesita",m[2],.78,"conversation-objective"));
+    if((m=raw.match(/^(.+?)\s+(?:abre|abren)\s+(.+)$/i)) && objectiveSubject(m[1]))out.push(addFact(b,m[1],"sirve_para",`abrir ${m[2]}`,.80,"conversation-objective"));
+    if((m=raw.match(/^(.+?)\s+(?:causa|provoca|produce)\s+(.+)$/i)) && objectiveSubject(m[1]))out.push(addFact(b,m[1],"puede_causar",m[2],.72,"conversation-objective"));
 
     return out.filter(Boolean);
   }
@@ -114,8 +130,21 @@
   function answerCognitiveQuery(b,text){
     ensureCognition(b);
     const n=CNorm(text);
+    const route=routedFrame(b,text);
+    const authoritative=window.NpcIntIntentRouter?.authoritative?.(route);
+    if(authoritative && !route.routes?.cognition)return null;
     let topic=null;
     let m;
+
+    if(route?.intent==="fact_verification"){
+      const subject=cleanEntity(route.slots?.subject||""),object=cleanEntity(route.slots?.object||"");
+      if(subject&&object){
+        infer(b);
+        const f=b.cognition.facts.find(x=>x.active!==false&&CNorm(x.subject)===CNorm(subject)&&(x.predicate==="es"||x.predicate==="es_un")&&CNorm(x.object)===CNorm(object));
+        if(f)return b.say(`Con mis hechos actuales, sí: relaciono ${subject} con ${object}. Mi confianza es ${Math.round(f.confidence*100)}%.`);
+      }
+      return null;
+    }
 
     if((m=n.match(/^(?:que sabes de|que sabes sobre|que recuerdas sobre)\s+(.+)$/)))topic=m[1];
     if(topic){

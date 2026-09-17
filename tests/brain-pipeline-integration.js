@@ -10,13 +10,15 @@ const html=fs.readFileSync(path.join(root,"index.html"),"utf8");
 const scripts=[...html.matchAll(/<script\s+src="([^"]+)"/g)].map(match=>match[1]);
 const position=name=>scripts.indexOf(name);
 
-for(const name of ["local-wiki.js","brain-pipeline.js","mental-cycle.js","cognitive-state.js","concept-graph.js","output-safety.js"])
+for(const name of ["local-wiki.js","brain-pipeline.js","mental-cycle.js","cognitive-state.js","concept-graph.js","output-safety.js","intent-router.js"])
   assert.notStrictEqual(position(name),-1,`${name} debe estar declarado en index.html`);
 assert.ok(position("local-wiki.js")<position("brain-pipeline.js"),"el pipeline debe encapsular las capas heredadas anteriores");
 assert.ok(position("brain-pipeline.js")<position("mental-cycle.js"),"el pipeline debe existir antes del primer módulo migrado");
 assert.ok(position("mental-cycle.js")<position("cognitive-state.js"),"el ciclo mental debe terminar antes del snapshot cognitivo");
 assert.ok(position("cognitive-state.js")<position("concept-graph.js"),"los wrappers posteriores deben conservar su posición exterior");
 assert.ok(position("brain-pipeline.js")<position("output-safety.js"),"output-safety debe seguir siendo una capa exterior posterior");
+assert.ok(position("conversation-quality.js")<position("intent-router.js"),"intent-router debe envolver a los clasificadores legacy y decidir primero en runtime");
+assert.ok(position("intent-router.js")<position("copy-chat.js"),"intent-router debe cargarse antes de utilidades finales sin alterar la UI");
 
 const printed=[];
 global.window={};
@@ -192,6 +194,25 @@ async function verifyCompleteBrowserOrder(){
 
   const fullPipeline=browser.NpcIntPipeline;
   assert.ok(fullPipeline?.state.installed,"el pipeline debe seguir instalado tras cargar todo index.html");
+  assert.ok(browser.NpcIntIntentRouter,"el navegador completo debe exponer un router de intención único");
+
+  const paraphrasePet=JSON.parse(vm.runInContext('JSON.stringify(NpcIntIntentRouter.resolve("me podrías recordar cuál era el nombre de mi mascota?",brain,{record:false}))',browser));
+  assert.strictEqual(paraphrasePet.intent,"ask_pet_name","una paráfrasis debe resolverse semánticamente sin depender de una frase exacta");
+  assert.ok(["local-embedding","understanding+embedding","structural"].includes(paraphrasePet.source),"la paráfrasis debe venir del router semántico");
+
+  await Promise.resolve(vm.runInContext('brain.hear("mi color favorito es el negro")',browser));
+  const preferenceRoute=JSON.parse(vm.runInContext('JSON.stringify(brain.intentRouter.current)',browser));
+  assert.strictEqual(preferenceRoute.intent,"preference_statement","la preferencia personal debe quedar fuera del almacén factual");
+  assert.strictEqual(vm.runInContext('brain.cognition.facts.some(f=>/color favorito/i.test(f.subject))',browser),false,"cognition no debe convertir una preferencia personal en hecho objetivo");
+  assert.strictEqual(vm.runInContext('NpcIntSocialMemory.profile(brain).preferences.some(x=>/color negro/i.test(x.value))',browser),true,"la preferencia debe conservarse en memoria social");
+
+  await Promise.resolve(vm.runInContext('brain.hear("Los gatos son mamíferos")',browser));
+  assert.strictEqual(vm.runInContext('brain.intentRouter.current.intent',browser),"fact_statement");
+  assert.strictEqual(vm.runInContext('brain.cognition.facts.some(f=>/gatos/i.test(f.subject)&&/mamíferos|mamiferos/i.test(f.object))',browser),true,"una proposición objetiva sí debe entrar a cognition");
+
+  await Promise.resolve(vm.runInContext('brain.hear("¿Los gatos son mamíferos?")',browser));
+  assert.strictEqual(vm.runInContext('brain.intentRouter.current.intent',browser),"fact_verification");
+  assert.strictEqual(vm.runInContext('brain.queryFrame.current.intent',browser),"fact_verification","QueryFrame debe usar la intención central y no reclasificarla");
   assert.strictEqual(vm.runInContext('NpcIntNeuralWeb.turnMode("que te gustaria crear una mision").needsHistory',browser),false,"un tema nuevo no debe heredar historial neural");
   assert.strictEqual(vm.runInContext('NpcIntNeuralWeb.turnMode("eso te habia preguntado?").needsHistory',browser),true,"una referencia explícita sí debe habilitar historial");
   const beforeHear=fullPipeline.state.trace.length;

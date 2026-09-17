@@ -13,6 +13,8 @@
   };
 
   NpcBrain.prototype.intent=function(text){
+    const routed=window.NpcIntIntentRouter?.routeFor?.(this,text,"conversation");
+    if(routed)return routed;
     const n=norm(text);
     const exact=(...xs)=>xs.includes(n);
 
@@ -192,8 +194,12 @@
         return this.say(pick(["Entendido; entonces no asumiré eso.","Vale. Descarto esa interpretación por ahora.","De acuerdo."]));
 
       case "question": {
-        const related=this.recall(text,4).filter(m=>m.type!=="dialogue" || !norm(m.text).endsWith(norm(text)));
-        if(related.length)return this.say(`No tengo conocimiento suficiente para responder con certeza. Lo más relacionado que recuerdo es: «${short(related[0].text,110)}».`);
+        const route=window.NpcIntIntentRouter?.currentFor?.(this,text);
+        // Una pregunta no resuelta no debe caer sobre el recuerdo global más reforzado.
+        // Las consultas de memoria explícitas se atienden en su capa especializada.
+        if(route?.memoryPolicy==="history"){
+          return this.say("Entiendo que estás preguntando por algo de nuestra conversación. Voy a resolverlo desde la memoria de turnos, no desde un recuerdo cualquiera.");
+        }
         return this.say("No lo sé todavía. No tengo información suficiente para responder eso sin inventar.");
       }
 
@@ -220,5 +226,5 @@
   };
 
   ensureDialogue(brain);
-  print("system","","capa conversacional v0.4 cargada · contexto entre turnos · repetición sensible a intención");
+  print("system","","capa conversacional v0.5 cargada · intención centralizada + fallback sin recuerdos irrelevantes");
 })();

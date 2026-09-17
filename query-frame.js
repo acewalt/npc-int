@@ -79,7 +79,7 @@
     const intent=parsed.intent;
     if(intent==="ask_preference")return {stores:[STORE.memory,STORE.social,STORE.internal],reason:"preferencia del agente: recuerdos, relación/persona y estado interno; conocimiento factual no decide el gusto"};
     if(intent==="state_statement")return {stores:[STORE.memory,STORE.commonsense,STORE.internal],reason:"estado comunicado por el jugador: conservar episodio y recuperar sentido común relevante sin asumir que el NPC comparte el estado"};
-    if(intent==="factual_query")return {stores:[STORE.commonsense,STORE.factual,STORE.lexical],reason:"consulta factual: relaciones de sentido común y conocimiento factual/lexical"};
+    if(intent==="factual_query"||intent==="fact_verification"||intent==="fact_statement")return {stores:[STORE.commonsense,STORE.factual,STORE.lexical],reason:"consulta/hecho factual: relaciones de sentido común y conocimiento factual/lexical"};
     if(intent==="ask_concept_understanding")return {stores:[STORE.lexical,STORE.factual,STORE.memory],reason:"concepto explícito: significado/conocimiento y contexto previo, no anáfora automática"};
     if(references?.references?.length)return {stores:[STORE.memory],reason:"la consulta depende de recuperar una referencia discursiva concreta"};
     return {stores:[STORE.memory,STORE.internal],reason:"sin clase especializada: contexto reciente y estado interno"};
@@ -141,7 +141,7 @@
     const xs=[];
     if(frame.intent==="state_statement"&&frame.subject?.id==="agent:player")xs.push("El jugador comunica un estado propio; no debe proyectarse automáticamente al estado de NIA.");
     if(frame.intent==="ask_preference")xs.push("Una preferencia de NIA debe derivarse de memoria, personalidad/estado o aprendizaje; un hecho enciclopédico sobre el objeto no decide el gusto.");
-    if(frame.intent==="factual_query")xs.push("La respuesta requiere evaluar evidencia sobre una proposición, no recuperar el primer texto relacionado.");
+    if(frame.intent==="factual_query"||frame.intent==="fact_verification")xs.push("La respuesta requiere evaluar evidencia sobre una proposición, no recuperar el primer texto relacionado.");
     if(frame.references.length)xs.push("La referencia discursiva fue resuelta antes de recuperar evidencia; su objetivo conserva procedencia y confianza.");
     if(!xs.length)xs.push("Mantener separados contexto conversacional, evidencia externa y estado interno antes de planificar la respuesta.");
     return xs;
@@ -150,12 +150,26 @@
   function build(text,b){
     const state=ensure(b),u=understandingFor(b,text),semantic=semanticFor(b,text,u),refs=b.referenceResolver?.last&&norm(b.referenceResolver.last.input)===norm(text)?b.referenceResolver.last:window.NpcIntReferenceResolver?.resolve?.(text,b)||{references:[],candidates:[]};
     const parsed=explicitParse(text,b,u,semantic);
+    const route=window.NpcIntIntentRouter?.currentFor?.(b,text)||null;
+    if(route&&window.NpcIntIntentRouter?.authoritative?.(route)){
+      parsed.intent=route.intent;
+      if(route.intent==="fact_verification"){
+        parsed.subject=concept(route.slots?.subject||"");
+        parsed.predicate="is_a";
+        parsed.object=concept(route.slots?.object||"");
+        parsed.question="truth";
+      }else if(route.intent==="factual_query"&&route.slots?.topic){
+        parsed.subject=concept(route.slots.topic);
+        parsed.predicate=route.slots.question==="definition"?"definition":"describe";
+        parsed.question=route.slots.question||"evidence";
+      }
+    }
     const frame={
       id:`qf:${state.seq++}`,version:1,time:b.time||0,input:String(text||""),canonical:u?.canonical||norm(text),
-      intent:parsed.intent||"unresolved",speechAct:semantic?.speechType||(/[?¿]/.test(text)?"question":"statement"),
+      intent:parsed.intent||"unresolved",speechAct:route?.speechAct||semantic?.speechType||(/[?¿]/.test(text)?"question":"statement"),
       subject:parsed.subject,predicate:parsed.predicate,object:parsed.object,question:parsed.question,topic:parsed.topic,
       entities:(semantic?.entities||[]).map(x=>({...x})),references:(refs.references||[]).map(x=>({...x,target:{...x.target}})),
-      evidenceRequest:null,candidateEvidence:[],reasoning:[],parser:{source:u?.source||semantic?.source||"query-frame-rules",confidence:u?.confidence??semantic?.confidence??null}
+      evidenceRequest:null,candidateEvidence:[],reasoning:[],parser:{source:route?.source||u?.source||semantic?.source||"query-frame-rules",confidence:route?.confidence??u?.confidence??semantic?.confidence??null}
     };
     frame.evidenceRequest=evidenceRequest(parsed,refs);
     frame.candidateEvidence=collectEvidence(b,frame);
@@ -200,5 +214,5 @@
 
   ensure(brain);
   window.NpcIntQueryFrame={ensure,build,record,collectEvidence,scoreEvidence,formatTrace,stores:STORE};
-  print("system","","query frame v1.0 cargado · intención + conceptos + referencias + routing de evidencia + /trace");
+  print("system","","query frame v1.1 cargado · intent router + conceptos + referencias + routing de evidencia + /trace");
 })();
