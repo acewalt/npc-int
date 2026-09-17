@@ -2,6 +2,70 @@
 
 (function(){
   const state={enabled:false,mode:"qwen",endpoint:"http://127.0.0.1:8765",ready:false,bridgeReady:false,backend:null,model:null,checking:false,lastError:null};
+  const qwenButton=document.getElementById("qwenToggle");
+  const qwenButtonLabel=document.getElementById("qwenToggleLabel");
+
+  function updateQwenButton(progress=null){
+    if(!qwenButton||!qwenButtonLabel)return;
+    const q=window.NpcIntQwenBrowser?.state;
+    const supported=!!q?.supported;
+    const active=state.enabled&&state.mode==="qwen"&&!!q?.ready;
+    const loading=!!q?.loading;
+    const failed=!!state.lastError&&!q?.ready;
+
+    qwenButton.disabled=false;
+    qwenButton.setAttribute("aria-pressed",active?"true":"false");
+
+    if(!supported){
+      qwenButton.dataset.state="unsupported";
+      qwenButtonLabel.textContent="QWEN · SIN WEBGPU";
+      qwenButton.disabled=true;
+      return;
+    }
+    if(active){
+      qwenButton.dataset.state="active";
+      qwenButtonLabel.textContent="QWEN · ACTIVO";
+      qwenButton.disabled=true;
+      return;
+    }
+    if(loading){
+      const p=Number(progress??q?.progress);
+      qwenButton.dataset.state="loading";
+      qwenButtonLabel.textContent=Number.isFinite(p)&&p>0?"QWEN · "+Math.round(p)+"%":"QWEN · CARGANDO";
+      qwenButton.disabled=true;
+      return;
+    }
+    if(failed){
+      qwenButton.dataset.state="error";
+      qwenButtonLabel.textContent="REINTENTAR QWEN";
+      return;
+    }
+    if(q?.ready){
+      qwenButton.dataset.state="ready";
+      qwenButtonLabel.textContent="ACTIVAR QWEN";
+      return;
+    }
+    qwenButton.dataset.state="idle";
+    qwenButtonLabel.textContent="ACTIVAR QWEN";
+  }
+
+  async function activateQwen(){
+    const q=window.NpcIntQwenBrowser;
+    state.mode="qwen";
+    state.lastError=null;
+    if(!q?.state?.supported){
+      state.enabled=false;
+      updateQwenButton();
+      print("error","QWEN>","WebGPU no está disponible en este navegador.");
+      return false;
+    }
+    state.enabled=true;
+    updateQwenButton();
+    const ok=await loadQwen(false);
+    if(!ok)state.enabled=false;
+    updateQwenButton();
+    return ok;
+  }
 
   function compactMemory(){return (brain.mem||[]).slice(-10).map(m=>({type:m.type,text:m.text,salience:m.salience,time:m.time}));}
   function compactCycle(){
