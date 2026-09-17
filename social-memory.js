@@ -31,7 +31,7 @@
     const key=keyOf(kind,clean),slot=slotOf(kind,clean),existing=s.items.find(x=>x.key===key);
     if(existing){
       deactivateSlot(s,slot,key);
-      existing.active=true;existing.slot=slot||existing.slot||null;
+      existing.active=true;existing.slot=slot||existing.slot||null;if(meta.data)existing.data={...(existing.data||{}),...meta.data};
       existing.mentions++;existing.lastMentionedTime=b.time||0;existing.lastMentionedWallMs=Date.now();existing.importance=Math.min(1,Math.max(existing.importance,meta.importance??.55)+.025);existing.confidence=Math.max(existing.confidence,meta.confidence??.82);return existing;
     }
     deactivateSlot(s,slot);
@@ -53,12 +53,13 @@
       const ageMatch=n.match(/\bcuando tenia\s+(\d{1,2})\s+anos?\b/)||n.match(/\ba los\s+(\d{1,2})\s+anos?\b/);
       const name=nameMatch?nameMatch[1]:null;
       const age=ageMatch?Number(ageMatch[1]):null;
+      const relative=/\bayer\b/.test(n)?"ayer":/\bhoy\b/.test(n)?"hoy":null;
       const label=name||species;
       push("pet",label,.93,["pet","deceased",species],{
         name,
         species,
         status:"deceased",
-        when:age?{type:"user_age",age}:null,
+        when:age?{type:"user_age",age}:relative?{type:"relative",value:relative}:null,
         original:raw
       });
     }
@@ -96,7 +97,7 @@
 
   function profile(b){
     const s=ensure(b),best=kind=>s.items.filter(x=>x.kind===kind&&x.active!==false).sort((a,c)=>(c.lastMentionedWallMs||0)-(a.lastMentionedWallMs||0)||(c.importance+c.mentions*.03)-(a.importance+a.mentions*.03)).slice(0,5);
-    return {name:best("name")[0]?.value||b.relation?.name||"Jugador",likes:best("like"),dislikes:best("dislike"),preferences:best("preference"),projects:best("project"),goals:best("goal"),updates:best("shared-update")};
+    return {name:best("name")[0]?.value||b.relation?.name||"Jugador",likes:best("like"),dislikes:best("dislike"),preferences:best("preference"),projects:best("project"),goals:best("goal"),updates:best("shared-update"),pets:best("pet")};
   }
 
   function latestPet(b){
