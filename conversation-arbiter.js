@@ -32,8 +32,13 @@
     return m?m[1].trim():null;
   }
 
-  function classify(text){
+  function classify(text,b=null){
     const n=ANorm(text);
+    const central=b?window.NpcIntIntentRouter?.currentFor?.(b,text):null;
+    if(central&&window.NpcIntIntentRouter?.authoritative?.(central)){
+      const routed=central.routes?.arbiter||null;
+      return {raw:text,canonical:n,intent:routed,centralIntent:central.intent,source:"intent-router",...(central.slots||{})};
+    }
     const opinionTopic=extractOpinionTopic(n);
     const creationTarget=extractCreationTarget(n);
     const destination=extractDestination(n);
@@ -78,20 +83,20 @@
     return {raw:text,canonical:n,intent,...data};
   }
 
-  function classifyMany(text){
+  function classifyMany(text,b=null){
     const raw=String(text||"").trim();
     const clauses=raw.split(/[?¿]+/).map(x=>x.trim()).filter(Boolean);
     if(clauses.length<=1){
-      const one=classify(raw);
+      const one=classify(raw,b);
       return one.intent?[one]:[];
     }
     const out=[];
     for(const c of clauses){
-      const f=classify(c);
+      const f=classify(c,b);
       if(f.intent)out.push(f);
     }
     if(!out.length){
-      const one=classify(raw);
+      const one=classify(raw,b);
       if(one.intent)out.push(one);
     }
     return out;
@@ -310,7 +315,7 @@
   const oldHear=NpcBrain.prototype.hear;
   NpcBrain.prototype.hear=function(text){
     const a=ensure(this);a.lastUserWallMs=Date.now();
-    const frames=classifyMany((text||"").trim());
+    const frames=classifyMany((text||"").trim(),this);
     if(!frames.length)return oldHear.call(this,text);
     const pre=capture(this);
     const aggregate=frames.length===1?frames[0]:{raw:text,canonical:ANorm(text),intent:"compound_request"};
@@ -348,5 +353,5 @@
 
   ensure(brain);
   window.NpcIntConversationArbiter={classify,classifyMany,stateAnswer,capabilitiesAnswer,knowledgeSummary,opinionAnswer};
-  print("system","","árbitro conversacional v1.2 cargado · turnos compuestos + yo/contexto/capacidades/destino/opinión · metaturnos ≠ eventos del mundo");
+  print("system","","árbitro conversacional v1.3 cargado · consume intención central + turnos compuestos + metaturnos");
 })();
