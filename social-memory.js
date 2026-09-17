@@ -64,6 +64,7 @@
       });
     }
 
+    if((m=raw.match(/\bmi color favorito es\s+(?:el |la )?([A-Za-zÁÉÍÓÚÜÑáéíóúüñ-]{2,30})/i)))push("preference",`color ${m[1]}`,.82,["preference","color"]);
     if((m=raw.match(/\bno me gusta(?:n)?\s+(.{2,120})/i)))push("dislike",m[1],.66,["preference"]);
     else if((m=raw.match(/\bme gusta(?:n)?\s+(.{2,120})/i)))push("like",m[1],.66,["preference"]);
     if((m=raw.match(/\bprefiero\s+(.{2,120})/i)))push("preference",m[1],.70,["preference"]);
@@ -123,5 +124,5 @@
   function format(b){const p=profile(b),s=ensure(b);const rows=s.items.slice(-12).map(x=>`#${x.id} [${x.kind}] ${x.value} · imp=${x.importance.toFixed(2)} · menciones=${x.mentions}`);return [`persona=${p.name}`,`recuerdos sociales=${s.items.length}`,...rows].join("\n");}
 
   window.NpcIntSocialMemory={ensure,add,extract,noteTurn,recall,profile,snapshot,restore,clear,format,slotOf,latestPet};
-  print("system","","memoria social v1.3 cargada · tiempo autobiográfico flexible + mascotas estructuradas + preferencias");
+  print("system","","memoria social v1.4 cargada · preferencias declarativas + tiempo autobiográfico flexible + mascotas");
 })();
