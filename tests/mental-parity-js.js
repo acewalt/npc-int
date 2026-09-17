@@ -30,6 +30,7 @@ class NpcBrain{
 
 global.NpcBrain=NpcBrain;
 global.brain=new NpcBrain();
+require("../brain-pipeline.js");
 require("../mental-cycle.js");
 
 function applyState(b,state){

@@ -2,7 +2,7 @@
 
 (function(){
   const state={
-    version:"1.0",
+    version:"1.1",
     installed:false,
     stages:{hear:[],event:[],tick:[]},
     legacy:{hear:null,event:null,tick:null},
@@ -83,7 +83,8 @@
   }
 
   function format(){
-    const lines=[`pipeline=${state.version} · installed=${state.installed?"sí":"no"}`,"legacy-core=encapsulado (migración incremental pendiente)"];
+    const registered=Object.values(state.stages).reduce((total,list)=>total+list.length,0);
+    const lines=[`pipeline=${state.version} · installed=${state.installed?"sí":"no"}`,`legacy-core=encapsulado · etapas registradas=${registered}`];
     for(const kind of ["hear","event","tick"]){
       const list=sort(state.stages[kind]);
       lines.push(`${kind}: ${list.length?list.map(x=>`${x.priority}:${x.phase}:${x.name}`).join(" → "):"legacy-core"}`);
@@ -95,9 +96,9 @@
 
   window.NpcIntPipeline={state,register,unregister,install,dispatch,format};
 
-  // Se carga al final del documento: todo monkey-patching heredado queda capturado
-  // detrás de una sola frontera. Las capas nuevas deben usar register(), no reabrir
-  // NpcBrain.prototype.hear/tick/event.
+  // Se carga justo antes de la primera capa migrada. Así captura las capas heredadas
+  // anteriores, mientras los wrappers aún no migrados que se cargan después conservan
+  // su posición observable. Las capas nuevas deben registrarse sin reabrir hear/tick/event.
   install();
 
   const oldCommand=command;

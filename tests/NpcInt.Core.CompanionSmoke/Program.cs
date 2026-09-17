@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
@@ -39,13 +40,46 @@ internal static class Program
         throw new FileNotFoundException("No se encontró el banco social canónico.", relative);
     }
 
+    private static string BestTopicForLike(SocialTopicPack pack, string interest)
+    {
+        var brain = new NpcBrain(17);
+        var companion = new CompanionEngine();
+        companion.ConfigureSocialTopics(pack.topics);
+        companion.ObserveUserTurn(brain, "Me gusta " + interest);
+        CompanionIntervention selected = companion.SelectSocialTopic(brain);
+        return selected == null ? null : selected.ContentId;
+    }
+
     public static int Main()
     {
         var brain = new NpcBrain(42);
         var companion = new CompanionEngine();
         SocialTopicPack socialTopics = LoadSocialTopics();
         int configuredTopics = companion.ConfigureSocialTopics(socialTopics.topics);
-        Assert(configuredTopics >= 12, "el Core debe aceptar el banco social canónico sin leer JSON directamente");
+        Assert(configuredTopics >= 60, "el Core debe aceptar el banco social ampliado sin leer JSON directamente");
+        Assert(socialTopics.topics.First(x => x.id == "silence_as_action").opinion.IndexOf("nada relevante que hablar", StringComparison.OrdinalIgnoreCase) < 0,
+            "el contenido del silencio debe conservar una redacción natural");
+        Assert(BestTopicForLike(socialTopics, "arquitectura") == "architecture_and_behavior",
+            "arquitectura debe privilegiar el label específico frente a tags técnicos ambiguos");
+        Assert(BestTopicForLike(socialTopics, "mapas") == "maps_and_choices",
+            "mapas debe privilegiar el label específico frente a señales auxiliares de videojuegos");
+        Assert(BestTopicForLike(socialTopics, "música") == "music_for_moods",
+            "música debe privilegiar un label específico frente al tag auxiliar de sonido para NPCs");
+
+        var coldBrain = new NpcBrain(18);
+        var coldCompanion = new CompanionEngine();
+        coldCompanion.ConfigureSocialTopics(socialTopics.topics);
+        var coldFamilies = new List<string>();
+        for (int i = 0; i < 5; i++)
+        {
+            CompanionIntervention next = coldCompanion.SelectSocialTopic(coldBrain);
+            Assert(next != null && next.ReasonCodes.Contains("cold_start_family_priority"),
+                "la rotación fría debe exponer la prioridad de familia");
+            coldFamilies.Add(next.Family);
+            coldCompanion.State.InitiativeHistory.Add("social-topic:" + next.ContentId);
+        }
+        Assert(string.Join(",", coldFamilies) == "everyday,culture,games,reflective,technical",
+            "los arranques en frío deben recorrer familias distintas antes de repetir");
 
         NpcAction a = Talk(brain, companion, "Me gusta World of Warcraft");
         Assert(a != null && a.Utterance.IndexOf("World of Warcraft", StringComparison.OrdinalIgnoreCase) >= 0,

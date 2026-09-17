@@ -69,9 +69,23 @@ Ejemplo:
 
 El objetivo no es solo definir palabras: el lexicón debe ayudar a **interpretar intención**. `qué onda` no debería analizarse literalmente como una pregunta física sobre ondas.
 
-## 4. Contenido social del personaje
+## 4. Sentido común para inferencia local
 
-`social-topics.es.json` no contiene hechos sobre el mundo ni recuerdos del jugador. Contiene temas que NIA puede proponer por iniciativa propia, con una postura provisional y una pregunta de continuidad.
+`commonsense.es.json` es el pack canónico de 170 relaciones generales que comparten `cognition.js` y `concept-graph.js`. `knowledge.js` lo carga una sola vez y publica el mismo snapshot a ambos consumidores, independientemente de si el `fetch` termina antes o después de que se inicialice el grafo.
+
+Cada relación declara `subject`, `predicate`, `object`, `confidence` y uno de cinco dominios: juegos, vida cotidiana, causalidad, objetos o interacción social no sensible. Los conceptos se normalizan a identificadores estables; la confianza expresa que una relación puede ser plausible sin convertirla automáticamente en observación ni certeza.
+
+El contrato está en `contracts/commonsense.v1.schema.json`. Al ampliar el pack:
+
+- conservar relaciones breves y reutilizables por el grafo;
+- usar `puede_*` cuando la consecuencia no sea necesaria;
+- evitar consejos médicos, legales o financieros y afirmaciones culturales dudosas;
+- no duplicar la misma tripleta sujeto/predicado/objeto;
+- añadir relaciones causales con señales que puedan comprobarse en el mundo del juego.
+
+## 5. Contenido social del personaje
+
+`social-topics.es.json` no contiene hechos sobre el mundo ni recuerdos del jugador. Contiene 80 temas que NIA puede proponer por iniciativa propia, con una postura provisional y una pregunta de continuidad.
 
 El selector usa `tags` y `relatedTo` para medir afinidad con preferencias, proyectos, objetivos y temas que el usuario ya compartió. Esa afinidad decide **cuándo resulta relevante mencionar una entrada**, pero nunca reescribe la opinión para complacer al usuario.
 

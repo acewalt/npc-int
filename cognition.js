@@ -3,10 +3,15 @@
 (function(){
   const CNorm=s=>(s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9ñ ]+/g," ").replace(/\s+/g," ").trim();
   const cleanEntity=s=>(s||"").trim().replace(/^(el|la|los|las|un|una|unos|unas|mi|mis|tu|tus)\s+/i,"").replace(/[.!?]+$/g,"").trim();
+  const commonsenseSubscriptions=new WeakMap();
 
   function ensureCognition(b){
-    if(b.cognition)return;
-    b.cognition={facts:[],rules:[],lastEntity:null,unresolved:[],seq:1,loaded:false};
+    if(!b.cognition)b.cognition={facts:[],rules:[],lastEntity:null,unresolved:[],seq:1,loaded:false};
+    if(!Array.isArray(b.cognition.facts))b.cognition.facts=[];
+    if(!Array.isArray(b.cognition.rules))b.cognition.rules=[];
+    if(!Array.isArray(b.cognition.unresolved))b.cognition.unresolved=[];
+    if(!Number.isInteger(b.cognition.seq)||b.cognition.seq<1)b.cognition.seq=1;
+    if(typeof b.cognition.loaded!=="boolean")b.cognition.loaded=false;
   }
 
   function addFact(b,subject,predicate,object,confidence=.72,source="conversation",derived=false){
@@ -141,16 +146,32 @@
     return null;
   }
 
-  async function loadCommonsense(b){
+  function importCommonsense(b,relations,meta={},announce=false){
     ensureCognition(b);
-    try{
-      const data=await fetch("knowledge/commonsense.es.json",{cache:"no-cache"}).then(r=>r.json());
-      for(const r of data.relations||[])addFact(b,r.subject,r.predicate,r.object,r.confidence??.7,"commonsense",false);
-      b.cognition.loaded=true;
-      print("system","",`razonamiento v0.1 cargado · ${data.relations?.length||0} relaciones base · hechos + inferencia + opciones`);
-    }catch(err){
-      console.warn("commonsense load failed",err);
-      print("error","COGNITION>","no pude cargar relaciones de sentido común; continuaré con hechos aprendidos en conversación");
+    for(const r of relations||[])addFact(b,r.subject,r.predicate,r.object,r.confidence??.7,"commonsense",false);
+    b.cognition.loaded=meta.ready!==false;
+    b.cognition.commonsenseCount=(relations||[]).length;
+    b.cognition.commonsenseSource=meta.source||"knowledge/commonsense.es.json";
+    if(announce){
+      const rejected=meta.rejected?` · ${meta.rejected} rechazadas por contrato`:"";
+      print("system","",`razonamiento v0.2 cargado · ${b.cognition.commonsenseCount} relaciones base${rejected} · hechos + inferencia + opciones`);
+    }
+  }
+
+  function subscribeCommonsense(b,announce=false){
+    ensureCognition(b);
+    const current=commonsenseSubscriptions.get(b);
+    if(current){
+      const store=globalThis.npcKnowledge;
+      if(store?.commonsenseReady)importCommonsense(b,store.commonsense,{ready:true,rejected:store.commonsenseRejected,source:"knowledge/commonsense.es.json"},false);
+      return;
+    }
+    const listener=(relations,meta)=>importCommonsense(b,relations,meta,announce);
+    commonsenseSubscriptions.set(b,listener);
+    if(typeof globalThis.NpcIntSubscribeCommonsense==="function")globalThis.NpcIntSubscribeCommonsense(listener);
+    else{
+      const pending=globalThis.NpcIntPendingCommonsenseSubscribers||(globalThis.NpcIntPendingCommonsenseSubscribers=[]);
+      pending.push(listener);
     }
   }
 
@@ -158,7 +179,7 @@
   NpcBrain.prototype.reset=function(){
     oldReset.call(this);
     ensureCognition(this);
-    loadCommonsense(this);
+    subscribeCommonsense(this);
   };
 
   const oldHear=NpcBrain.prototype.hear;
@@ -210,5 +231,5 @@
   };
 
   ensureCognition(brain);
-  loadCommonsense(brain);
+  subscribeCommonsense(brain,true);
 })();

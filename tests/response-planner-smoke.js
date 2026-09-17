@@ -63,6 +63,7 @@ window.NpcIntDialogueManager={
   }
 };
 
+require("../brain-pipeline.js");
 require("../cognitive-state.js");
 require("../response-planner.js");
 

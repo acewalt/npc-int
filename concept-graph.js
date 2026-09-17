@@ -45,25 +45,53 @@
 
   function makeGraph(){
     const nodes=new Map(),out=new Map(),incoming=new Map();
-    const ensure=id=>{
+    const ensure=value=>{
+      const raw=String(value||"").replace(/_/g," ").trim();
+      let id=value;
       id=GNorm(id).replace(/ /g,"_");
-      if(!nodes.has(id))nodes.set(id,{id,label:LABELS[id]||id.replace(/_/g," ")});
+      if(!nodes.has(id))nodes.set(id,{id,label:LABELS[id]||raw||id.replace(/_/g," ")});
       if(!out.has(id))out.set(id,[]);
       if(!incoming.has(id))incoming.set(id,[]);
       return id;
     };
     const addEdge=(from,relation,to,weight=.6,source="seed")=>{
-      from=ensure(from);to=ensure(to);
+      from=ensure(from);to=ensure(to);relation=GNorm(relation).replace(/ /g,"_");
       const key=`${from}|${relation}|${to}`;
-      if(out.get(from).some(e=>e.key===key))return;
+      const existing=out.get(from).find(e=>e.key===key);
+      if(existing){
+        if(source!=="seed")existing.source=source;
+        existing.weight=Math.max(existing.weight,clamp(weight));
+        return false;
+      }
       const e={key,from,relation,to,weight:clamp(weight),source};
       out.get(from).push(e);incoming.get(to).push(e);
+      return true;
     };
     for(const e of SEED_EDGES)addEdge(...e,"seed");
     return {nodes,out,incoming,addEdge,ensure};
   }
 
   const graph=makeGraph();
+  let commonsenseCount=0,commonsenseRejected=0,commonsenseSource=null;
+  let resolveCommonsenseReady;
+  const commonsenseReady=new Promise(resolve=>{resolveCommonsenseReady=resolve;});
+
+  function importCommonsense(relations,meta={}){
+    let added=0;
+    for(const relation of relations||[]){
+      if(graph.addEdge(relation.subject,relation.predicate,relation.object,relation.confidence,"commonsense"))added++;
+    }
+    commonsenseCount=(relations||[]).length;
+    commonsenseRejected=meta.rejected||0;
+    commonsenseSource=meta.source||"knowledge/commonsense.es.json";
+    resolveCommonsenseReady({relations:commonsenseCount,added,rejected:commonsenseRejected,source:commonsenseSource});
+  }
+
+  if(typeof globalThis.NpcIntSubscribeCommonsense==="function")globalThis.NpcIntSubscribeCommonsense(importCommonsense);
+  else{
+    const pending=globalThis.NpcIntPendingCommonsenseSubscribers||(globalThis.NpcIntPendingCommonsenseSubscribers=[]);
+    pending.push(importCommonsense);
+  }
 
   function canonicalToken(word){
     const n=GNorm(word).replace(/ /g,"_");
@@ -167,6 +195,10 @@
     print("debug","CONCEPTS>",formatActivation(a));
   };
 
-  window.NpcIntConceptGraph={activate,causesOf,neighbors,textConcepts,addEdge:graph.addEdge,graph,formatActivation};
-  print("system","","grafo conceptual v1.0 cargado · activación semántica multi-salto · relaciones causales/funcionales");
+  window.NpcIntConceptGraph={
+    activate,causesOf,neighbors,textConcepts,addEdge:graph.addEdge,graph,formatActivation,
+    commonsenseReady,
+    commonsenseStatus:()=>({relations:commonsenseCount,rejected:commonsenseRejected,source:commonsenseSource})
+  };
+  print("system","","grafo conceptual v1.1 cargado · activación semántica multi-salto · pack de sentido común enlazado");
 })();

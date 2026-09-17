@@ -19,6 +19,30 @@ namespace NpcInt.Core
         {
             "ia", "ui", "ux", "vr", "ar", "2d", "3d"
         };
+        private static readonly string[] SocialTopicFamilyOrder =
+        {
+            "everyday", "culture", "games", "reflective", "technical"
+        };
+        private static readonly string[] EverydayTopicSignals =
+        {
+            "vida cotidiana", "hogar", "bienestar", "cocina", "jardineria", "caminar", "descanso",
+            "clima", "habitos", "hobbies", "colecciones", "mascotas"
+        };
+        private static readonly string[] CultureTopicSignals =
+        {
+            "creatividad", "cultura", "ciencia", "arte", "fotografia", "lectura", "musica", "astronomia",
+            "biologia", "mitologia", "mapas", "geografia", "acertijos", "artesania", "humor", "lenguaje"
+        };
+        private static readonly string[] TechnicalTopicSignals =
+        {
+            "desarrollo", "programacion", "unity", "testing", "telemetria", "observabilidad", "depuracion",
+            "determinismo", "persistencia", "rendimiento", "optimizacion", "inteligencia artificial", "ia local",
+            "comandos", "herramientas", "permisos", "integracion", "eventos", "configuracion"
+        };
+        private static readonly string[] GamesTopicSignals =
+        {
+            "videojuegos", "jugador", "multijugador", "jugabilidad", "misiones", "sigilo"
+        };
 
         public CompanionState State { get; private set; } = new CompanionState();
         public IReadOnlyList<SocialTopicDefinition> SocialTopics { get { return _socialTopics; } }
@@ -166,6 +190,7 @@ namespace NpcInt.Core
             memories.AddRange(BestSocialMemories("shared-update"));
             List<SocialMemoryRecord> dislikes = BestSocialMemories("dislike");
             CompanionTopic active = State.Topics.FirstOrDefault(x => x.Id == State.ActiveTopicId && x.Status == "active");
+            string preferredFamily = PreferredColdStartFamily();
             CompanionIntervention best = null;
 
             foreach (SocialTopicDefinition topic in _socialTopics)
@@ -192,15 +217,18 @@ namespace NpcInt.Core
                 float relevance = Math.Max(affinity, activeAffinity * 0.90f);
                 float curiosity = MathUtil.Clamp01(GetTrait("curiosity", brain.Drives.Curiosity));
                 bool coldStart = relevance < 0.34f;
+                string family = SocialTopicFamily(topic);
+                float familyBonus = coldStart && family == preferredFamily ? 0.04f : 0f;
                 float score = Math.Min(0.72f, MathUtil.Clamp01(
                     0.38f + topic.weight * 0.10f + relevance * 0.12f + novelty * 0.07f +
-                    curiosity * 0.05f + (coldStart ? 0.03f : 0f)));
+                    curiosity * 0.05f + (coldStart ? 0.03f : 0f) + familyBonus));
 
                 var intervention = new CompanionIntervention
                 {
                     Intent = "social_topic",
                     ContentId = topic.id,
                     Topic = topic.label,
+                    Family = family,
                     Source = "character-social-topic",
                     Utterance = JoinSocialTopicText(topic),
                     IsInitiative = true,
@@ -213,7 +241,9 @@ namespace NpcInt.Core
                         Relevance = relevance,
                         Novelty = novelty,
                         Curiosity = curiosity,
-                        ColdStart = coldStart
+                        ColdStart = coldStart,
+                        FamilyBonus = familyBonus,
+                        PreferredFamily = preferredFamily
                     }
                 };
 
@@ -237,6 +267,8 @@ namespace NpcInt.Core
                 else
                 {
                     intervention.ReasonCodes.Add("cold_start");
+                    intervention.ReasonCodes.Add("family_" + family);
+                    if (familyBonus > 0f) intervention.ReasonCodes.Add("cold_start_family_priority");
                     intervention.Reason = "tema propio coherente con la curiosidad y los valores del personaje";
                 }
 
@@ -684,12 +716,50 @@ namespace NpcInt.Core
 
         private static float SocialTopicSimilarity(string value, SocialTopicDefinition topic)
         {
-            float best = TextAffinity(value, topic.label);
+            float labelScore = TextAffinity(value, topic.label);
+            float tagScore = 0f;
             if (topic.tags != null)
-                for (int i = 0; i < topic.tags.Count; i++) best = Math.Max(best, TextAffinity(value, topic.tags[i]));
+                for (int i = 0; i < topic.tags.Count; i++) tagScore = Math.Max(tagScore, TextAffinity(value, topic.tags[i]));
+            float relatedScore = 0f;
             if (topic.relatedTo != null)
-                for (int i = 0; i < topic.relatedTo.Count; i++) best = Math.Max(best, TextAffinity(value, topic.relatedTo[i]));
-            return best;
+                for (int i = 0; i < topic.relatedTo.Count; i++) relatedScore = Math.Max(relatedScore, TextAffinity(value, topic.relatedTo[i]));
+            return Math.Max(labelScore, Math.Max(tagScore * 0.82f, relatedScore * 0.68f));
+        }
+
+        private static string SocialTopicFamily(SocialTopicDefinition topic)
+        {
+            var tags = new HashSet<string>((topic.tags ?? new List<string>()).Select(MemoryStore.Normalize), StringComparer.Ordinal);
+            if (EverydayTopicSignals.Any(tags.Contains)) return "everyday";
+            if (CultureTopicSignals.Any(tags.Contains)) return "culture";
+            if (TechnicalTopicSignals.Any(tags.Contains)) return "technical";
+            if (GamesTopicSignals.Any(tags.Contains)) return "games";
+            return "reflective";
+        }
+
+        private string PreferredColdStartFamily()
+        {
+            var available = new HashSet<string>(_socialTopics.Select(SocialTopicFamily), StringComparer.Ordinal);
+            var counts = SocialTopicFamilyOrder.ToDictionary(x => x, x => 0, StringComparer.Ordinal);
+            foreach (string key in State.InitiativeHistory)
+            {
+                const string prefix = "social-topic:";
+                if (string.IsNullOrEmpty(key) || !key.StartsWith(prefix, StringComparison.Ordinal)) continue;
+                string id = key.Substring(prefix.Length);
+                SocialTopicDefinition topic = _socialTopics.FirstOrDefault(x => x.id == id);
+                if (topic == null) continue;
+                counts[SocialTopicFamily(topic)]++;
+            }
+
+            string best = null;
+            int bestCount = int.MaxValue;
+            for (int i = 0; i < SocialTopicFamilyOrder.Length; i++)
+            {
+                string family = SocialTopicFamilyOrder[i];
+                if (!available.Contains(family) || counts[family] >= bestCount) continue;
+                best = family;
+                bestCount = counts[family];
+            }
+            return best ?? "reflective";
         }
 
         private static float TextAffinity(string a, string b)

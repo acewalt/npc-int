@@ -5,6 +5,13 @@
   const internalFocus=/^(paso del tiempo|tiempo|silencio|estado interno|inactividad|ciclo interno|paso de tiempo)$/;
   const stop=new Set(["que","como","para","pero","porque","esto","eso","una","uno","unos","unas","del","las","los","con","por","soy","estoy","quiero","gusta","hacer","algo","sobre","entre","parte"]);
   const shortSignals=new Set(["ia","ui","ux","vr","ar","2d","3d"]);
+  const familyOrder=["everyday","culture","games","reflective","technical"];
+  const familySignals={
+    everyday:new Set(["vida cotidiana","hogar","bienestar","cocina","jardineria","caminar","descanso","clima","habitos","hobbies","colecciones","mascotas"]),
+    culture:new Set(["creatividad","cultura","ciencia","arte","fotografia","lectura","musica","astronomia","biologia","mitologia","mapas","geografia","acertijos","artesania","humor","lenguaje"]),
+    technical:new Set(["desarrollo","programacion","unity","testing","telemetria","observabilidad","depuracion","determinismo","persistencia","rendimiento","optimizacion","inteligencia artificial","ia local","comandos","herramientas","permisos","integracion","eventos","configuracion"]),
+    games:new Set(["videojuegos","jugador","multijugador","jugabilidad","misiones","sigilo"])
+  };
   const tokens=s=>norm(s).split(" ").filter(w=>(w.length>2||shortSignals.has(w))&&!stop.has(w));
   const clamp=v=>Math.max(0,Math.min(1,v));
 
@@ -18,7 +25,7 @@
   }
   function seenRecently(b,key,now=Date.now()){return ensure(b).history.some(x=>x.key===key&&now-x.wallMs<1000*60*12);}
   function seenInTail(b,key,count=6){return ensure(b).history.slice(-count).some(x=>x.key===key);}
-  function candidate(b,type,text,score,novelty,reason,meta={}){return {id:ensure(b).seq++,type,text,score,novelty,reason,key:meta.key||`${type}:${norm(text).slice(0,80)}`,urgent:!!meta.urgent,topic:meta.topic||null,topicId:meta.topicId||null,source:meta.source||null,matchedMemory:meta.matchedMemory||null,relevance:meta.relevance??0,reasonCodes:meta.reasonCodes||[],scoreBreakdown:meta.scoreBreakdown||null};}
+  function candidate(b,type,text,score,novelty,reason,meta={}){return {id:ensure(b).seq++,type,text,score,novelty,reason,key:meta.key||`${type}:${norm(text).slice(0,80)}`,urgent:!!meta.urgent,topic:meta.topic||null,topicId:meta.topicId||null,family:meta.family||null,source:meta.source||null,matchedMemory:meta.matchedMemory||null,relevance:meta.relevance??0,reasonCodes:meta.reasonCodes||[],scoreBreakdown:meta.scoreBreakdown||null};}
   function meaningfulFocus(focus){
     const n=norm(focus);if(!n||internalFocus.test(n))return false;
     const topics=window.NpcIntTopics;if(topics?.isKeepable&&!topics.isKeepable(focus))return false;
@@ -32,13 +39,31 @@
     return hit/Math.min(aa.size,bb.size);
   }
 
-  function topicPhrases(topic){
+  function topicSimilarity(value,topic){
     const tags=Array.isArray(topic.tags)?topic.tags:[],related=Array.isArray(topic.relatedTo)?topic.relatedTo:[];
-    return [topic.label,...tags,...related].filter(Boolean);
+    const labelScore=similarity(value,topic.label);
+    const tagScore=tags.reduce((best,x)=>Math.max(best,similarity(value,x)),0)*.82;
+    const relatedScore=related.reduce((best,x)=>Math.max(best,similarity(value,x)),0)*.68;
+    return Math.max(labelScore,tagScore,relatedScore);
   }
 
-  function topicSimilarity(value,topic){
-    return topicPhrases(topic).reduce((best,x)=>Math.max(best,similarity(value,x)),0);
+  function topicFamily(topic){
+    const tags=new Set((Array.isArray(topic?.tags)?topic.tags:[]).map(norm));
+    for(const family of ["everyday","culture","technical","games"])
+      if([...familySignals[family]].some(signal=>tags.has(signal)))return family;
+    return "reflective";
+  }
+
+  function preferredColdStartFamily(b,bank){
+    const available=new Set(bank.map(topicFamily)),byId=new Map(bank.map(topic=>[topic.id,topic]));
+    const counts=Object.fromEntries(familyOrder.map(family=>[family,0]));
+    for(const item of ensure(b).history){
+      if(item?.type!=="social_topic"&&!String(item?.key||"").startsWith("social-topic:"))continue;
+      const id=item.topicId||String(item.key).slice("social-topic:".length);
+      const family=familyOrder.includes(item.family)?item.family:topicFamily(byId.get(id));
+      if(Object.hasOwn(counts,family))counts[family]++;
+    }
+    return familyOrder.filter(family=>available.has(family)).sort((a,c)=>(counts[a]-counts[c])||(familyOrder.indexOf(a)-familyOrder.indexOf(c)))[0]||"reflective";
   }
 
   function socialTopicText(topic){
@@ -56,6 +81,7 @@
     ];
     const dislikes=profile.dislikes||[];
     const active=window.NpcIntTopics?.active?.(b);
+    const preferredFamily=preferredColdStartFamily(b,bank);
     const out=[];
 
     for(const topic of bank){
@@ -76,19 +102,20 @@
       const relevance=Math.max(affinity,activeAffinity*.9);
       const curiosity=clamp(b.companionPersonality?.traits?.curiosity??b.mind?.cognition?.curiosity??.65);
       const coldStart=relevance<.34;
-      const score=Math.min(.72,clamp(.38+weight*.10+relevance*.12+novelty*.07+curiosity*.05+(coldStart?.03:0)));
+      const family=topicFamily(topic),familyBonus=coldStart&&family===preferredFamily ? .04 : 0;
+      const score=Math.min(.72,clamp(.38+weight*.10+relevance*.12+novelty*.07+curiosity*.05+(coldStart?.03:0)+familyBonus));
       const reasonCodes=["character_interest",priorUses?"rotated":"unseen"];
       if(matched&&affinity>=.34)reasonCodes.push(`matches_user_${matched.kind}`);
       else if(active&&activeAffinity>=.34)reasonCodes.push("matches_active_topic");
-      else reasonCodes.push("cold_start");
+      else reasonCodes.push("cold_start",`family_${family}`,...(familyBonus?["cold_start_family_priority"]:[]));
       const reason=matched&&affinity>=.34
         ? `tema propio relacionado con ${matched.kind==="project"||matched.kind==="goal"?"tu proyecto u objetivo":"una preferencia tuya"}: «${String(matched.value).slice(0,70)}»`
         : active&&activeAffinity>=.34
           ? `tema propio relacionado con el foco activo «${String(active.label).slice(0,70)}»`
           : "tema propio coherente con la curiosidad y los valores del personaje";
       out.push(candidate(b,"social_topic",socialTopicText(topic),score,novelty,reason,{
-        key,topic:topic.label,topicId:topic.id,source:"character-social-topic",matchedMemory:matched&&affinity>=.34?{id:matched.id,kind:matched.kind,value:matched.value,affinity}:null,
-        relevance,reasonCodes,scoreBreakdown:{weight,relevance,novelty,curiosity,coldStart}
+        key,topic:topic.label,topicId:topic.id,family,source:"character-social-topic",matchedMemory:matched&&affinity>=.34?{id:matched.id,kind:matched.kind,value:matched.value,affinity}:null,
+        relevance,reasonCodes,scoreBreakdown:{weight,relevance,novelty,curiosity,coldStart,familyBonus,preferredFamily}
       }));
     }
     return out.sort((a,c)=>(c.score-a.score)||(c.novelty-a.novelty)||String(a.topicId).localeCompare(String(c.topicId)));
@@ -148,7 +175,7 @@
   }
   function snapshot(b){
     const s=ensure(b);
-    return {version:3,seq:s.seq,lastSocialTopicId:s.lastSocialTopicId||null,history:s.history.slice(-30).map(x=>({type:x.type,key:x.key,topic:x.topic||null,topicId:x.topicId||null,source:x.source||null,reason:x.reason||null,reasonCodes:x.reasonCodes||[],wallMs:x.wallMs||0,time:x.time||0}))};
+    return {version:3,seq:s.seq,lastSocialTopicId:s.lastSocialTopicId||null,history:s.history.slice(-30).map(x=>({type:x.type,key:x.key,topic:x.topic||null,topicId:x.topicId||null,family:x.family||null,source:x.source||null,reason:x.reason||null,reasonCodes:x.reasonCodes||[],wallMs:x.wallMs||0,time:x.time||0}))};
   }
   function restore(b,data){
     const s=ensure(b);if(!data||!Array.isArray(data.history))return s;
@@ -157,6 +184,6 @@
   }
   function clear(b){const s=ensure(b);s.history=[];s.lastCandidate=null;s.lastOutput=null;s.lastSocialTopicId=null;return s;}
   function format(b){const s=ensure(b),c=s.lastCandidate,bank=globalThis.npcKnowledge?.socialTopics?.length||0;return [`historial=${s.history.length} | banco_social=${bank} | último_tema_propio=${s.lastSocialTopicId||"—"}`,c?`candidato=${c.type} · score=${c.score.toFixed(2)} · relevancia=${(c.relevance??0).toFixed(2)} · novedad=${c.novelty.toFixed(2)} · razones=${(c.reasonCodes||[]).join(",")||"—"} · motivo=${c.reason}`:"sin candidato",`última salida=${s.lastOutput||"—"}`].join("\n");}
-  window.NpcIntInitiative={ensure,meaningfulFocus,similarity,socialTopicCandidates,buildCandidates,choose,commit,snapshot,restore,clear,format};
-  print("system","","iniciativa social v1.2 cargada · temas propios + afinidad social + continuidad explicable");
+  window.NpcIntInitiative={ensure,meaningfulFocus,similarity,topicSimilarity,topicFamily,socialTopicCandidates,buildCandidates,choose,commit,snapshot,restore,clear,format};
+  print("system","","iniciativa social v1.3 cargada · afinidad ponderada + rotación temática explicable");
 })();

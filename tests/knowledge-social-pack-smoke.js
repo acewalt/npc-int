@@ -28,7 +28,7 @@ require("../knowledge.js");
 (async()=>{
   for(let i=0;i<20&&!global.npcKnowledge.ready;i++)await new Promise(resolve=>setImmediate(resolve));
   assert.strictEqual(global.npcKnowledge.ready,true,"la carga de packs debe terminar");
-  assert.ok(global.npcKnowledge.socialTopics.length>=12,"knowledge.js debe enrutar el pack social a su colección propia");
+  assert.ok(global.npcKnowledge.socialTopics.length>=60,"knowledge.js debe conservar el banco social ampliado en su colección propia");
   assert.ok(global.npcKnowledge.socialTopics.some(x=>x.id==="wow_pvp"));
   assert.ok(!global.npcKnowledge.encyclopedia.some(x=>x.id==="wow_pvp"),"los temas sociales no son hechos enciclopédicos");
   assert.ok(global.npcKnowledge.sources.some(x=>x.type==="social-topics"));

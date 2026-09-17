@@ -85,6 +85,7 @@
   const oldReset=NpcBrain.prototype.reset;
   NpcBrain.prototype.reset=function(){
     oldReset.call(this);
+    this.pragmatics=null;
     ensurePragmatics(this);
   };
 

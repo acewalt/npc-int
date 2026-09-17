@@ -266,39 +266,39 @@
     ensureMind(this);
   };
 
-  const oldHear=NpcBrain.prototype.hear;
-  NpcBrain.prototype.hear=function(text){
-    ensureMind(this);
-    const p=perceive(this,"user",text,{source:this.relation?.name||"Jugador"});
-    const result=oldHear.call(this,text);
-    const finish=answer=>{
-      const cycle=runCycle(this,p,{surfaceReply:answer});
-      applyExecutionEffects(this,cycle);
-      return answer;
-    };
-    return result&&typeof result.then==="function"?result.then(finish):finish(result);
-  };
+  const pipeline=window.NpcIntPipeline;
+  if(!pipeline||typeof pipeline.register!=="function")
+    throw new Error("mental-cycle.js requiere brain-pipeline.js cargado previamente");
 
-  const oldEvent=NpcBrain.prototype.event;
-  NpcBrain.prototype.event=function(text){
-    ensureMind(this);
-    const p=perceive(this,"world",text,{source:"mundo"});
-    const result=oldEvent.call(this,text);
-    const cycle=runCycle(this,p,{});
-    applyExecutionEffects(this,cycle);
-    return result;
-  };
+  pipeline.register("hear","mental-cycle:perceive",ctx=>{
+    ensureMind(ctx.brain);
+    ctx.data.mentalPerception=perceive(ctx.brain,"user",ctx.args[0],{source:ctx.brain.relation?.name||"Jugador"});
+  },{phase:"before",priority:200});
+  pipeline.register("hear","mental-cycle:decide",ctx=>{
+    const cycle=runCycle(ctx.brain,ctx.data.mentalPerception,{surfaceReply:ctx.result});
+    applyExecutionEffects(ctx.brain,cycle);
+  },{phase:"after",priority:600});
 
-  const oldTick=NpcBrain.prototype.tick;
-  NpcBrain.prototype.tick=function(minutes=1){
-    ensureMind(this);
-    const p=perceive(this,"time","Pasó tiempo sin un estímulo externo.",{source:"interno",importance:.15,novelty:.02});
-    syncMentalState(this,p,Math.max(0,minutes||0));
-    const result=oldTick.call(this,minutes);
-    const cycle=runCycle(this,p,{minutes:0});
-    applyExecutionEffects(this,cycle);
-    return result;
-  };
+  pipeline.register("event","mental-cycle:perceive",ctx=>{
+    ensureMind(ctx.brain);
+    ctx.data.mentalPerception=perceive(ctx.brain,"world",ctx.args[0],{source:"mundo"});
+  },{phase:"before",priority:200});
+  pipeline.register("event","mental-cycle:decide",ctx=>{
+    const cycle=runCycle(ctx.brain,ctx.data.mentalPerception,{});
+    applyExecutionEffects(ctx.brain,cycle);
+  },{phase:"after",priority:600});
+
+  pipeline.register("tick","mental-cycle:perceive",ctx=>{
+    ensureMind(ctx.brain);
+    const minutes=ctx.args[0]===undefined?1:ctx.args[0];
+    const p=perceive(ctx.brain,"time","Pasó tiempo sin un estímulo externo.",{source:"interno",importance:.15,novelty:.02});
+    syncMentalState(ctx.brain,p,Math.max(0,minutes||0));
+    ctx.data.mentalPerception=p;
+  },{phase:"before",priority:200});
+  pipeline.register("tick","mental-cycle:decide",ctx=>{
+    const cycle=runCycle(ctx.brain,ctx.data.mentalPerception,{minutes:0});
+    applyExecutionEffects(ctx.brain,cycle);
+  },{phase:"after",priority:600});
 
   const oldCommand=command;
   command=function(raw){

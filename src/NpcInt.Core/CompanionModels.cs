@@ -78,6 +78,8 @@ namespace NpcInt.Core
         public float Novelty;
         public float Curiosity;
         public bool ColdStart;
+        public float FamilyBonus;
+        public string PreferredFamily = string.Empty;
     }
 
     public sealed class CompanionPendingThread
@@ -115,6 +117,7 @@ namespace NpcInt.Core
         public string Reason = string.Empty;
         public string MatchedMemoryKind = string.Empty;
         public string MatchedMemoryValue = string.Empty;
+        public string Family = string.Empty;
         public float Relevance;
         public float Novelty;
         public readonly List<string> ReasonCodes = new List<string>();

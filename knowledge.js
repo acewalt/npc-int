@@ -4,15 +4,55 @@
   const KNorm=s=>(s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9ñ ]+/g," ").replace(/\s+/g," ").trim();
   const KStop=new Set(["que","qué","es","son","un","una","el","la","los","las","de","del","y","o","en","para","por","como","cómo","me","dime","explica","define","significa","sobre","hablame","háblame"]);
   const KTokens=s=>KNorm(s).split(" ").filter(w=>w.length>2&&!KStop.has(w));
+  const KId=s=>KNorm(String(s||"").replaceAll("_"," ")).replace(/ /g,"_");
+
+  function validCommonsenseRelation(value){
+    if(!value||typeof value!=="object"||Array.isArray(value))return false;
+    const keys=Object.keys(value);
+    if(keys.some(k=>!["subject","predicate","object","confidence","domain"].includes(k)))return false;
+    return typeof value.subject==="string"&&KId(value.subject).length>=2
+      &&typeof value.predicate==="string"&&/^[a-z][a-z0-9_]*$/.test(value.predicate)
+      &&typeof value.object==="string"&&KId(value.object).length>=2
+      &&Number.isFinite(value.confidence)&&value.confidence>=0&&value.confidence<=1
+      &&["juegos","vida_cotidiana","causalidad","objetos","social"].includes(value.domain);
+  }
 
   class KnowledgeStore{
     constructor(){
       this.encyclopedia=[];
       this.dictionary=[];
       this.socialTopics=[];
+      this.commonsense=[];
+      this.commonsenseReady=false;
+      this.commonsenseRejected=0;
+      this.commonsenseListeners=new Set();
       this.ready=false;
       this.sources=[];
       this.wikipediaCache=new Map();
+    }
+
+    subscribeCommonsense(listener){
+      if(typeof listener!=="function")return ()=>{};
+      if(this.commonsenseReady){this.deliverCommonsense(listener);return ()=>{};}
+      this.commonsenseListeners.add(listener);
+      return ()=>this.commonsenseListeners.delete(listener);
+    }
+
+    deliverCommonsense(listener){
+      try{
+        listener(this.commonsense.slice(),{
+          ready:true,
+          rejected:this.commonsenseRejected,
+          source:this.sources.find(x=>x.type==="commonsense")?.path||"knowledge/commonsense.es.json"
+        });
+      }catch(err){console.warn("commonsense consumer failed",err);}
+    }
+
+    publishCommonsense(){
+      this.commonsenseReady=true;
+      const listeners=[...this.commonsenseListeners];
+      this.commonsenseListeners.clear();
+      for(const listener of listeners)this.deliverCommonsense(listener);
     }
 
     async load(){
@@ -25,14 +65,29 @@
             const valid=(data.topics||[]).filter(x=>x&&x.id&&x.label&&x.hook&&x.opinion&&x.followUp&&Array.isArray(x.tags)&&x.tags.length&&Array.isArray(x.relatedTo)&&Number.isFinite(Number(x.weight))&&Number(x.weight)>=0&&Number(x.weight)<=1);
             this.socialTopics.push(...valid);
           }
-          else this.encyclopedia.push(...(data.entries||[]));
+          else if(pack.type==="commonsense"){
+            const raw=Array.isArray(data.relations)?data.relations:[];
+            const unique=new Map();
+            for(const relation of raw){
+              if(!validCommonsenseRelation(relation)){this.commonsenseRejected++;continue;}
+              const normalized={
+                subject:KId(relation.subject),predicate:relation.predicate,object:KId(relation.object),
+                confidence:relation.confidence,domain:relation.domain
+              };
+              unique.set(`${normalized.subject}|${normalized.predicate}|${normalized.object}`,normalized);
+            }
+            this.commonsense.push(...unique.values());
+          }
+          else if(pack.type==="encyclopedia")this.encyclopedia.push(...(data.entries||[]));
           this.sources.push({type:pack.type,path:pack.path,name:data.name||pack.path});
         }
+        this.publishCommonsense();
         this.ready=true;
-        print("system","",`conocimiento v0.3 cargado · ${this.encyclopedia.length} conceptos · ${this.dictionary.length} entradas léxicas · ${this.socialTopics.length} temas sociales · Wikipedia online disponible`);
+        print("system","",`conocimiento v0.4 cargado · ${this.encyclopedia.length} conceptos · ${this.dictionary.length} entradas léxicas · ${this.commonsense.length} relaciones de sentido común · ${this.socialTopics.length} temas sociales · Wikipedia online disponible`);
       }catch(err){
         console.warn("Knowledge load failed",err);
         print("error","KNOWLEDGE>","no pude cargar los packs locales; Wikipedia online seguirá disponible si hay conexión");
+        this.publishCommonsense();
         this.ready=true;
       }
     }
@@ -169,11 +224,17 @@
       }
     }
 
-    stats(){return {concepts:this.encyclopedia.length,words:this.dictionary.length,socialTopics:this.socialTopics.length,sources:this.sources.length,ready:this.ready,cachedWikipedia:this.wikipediaCache.size};}
+    stats(){return {concepts:this.encyclopedia.length,words:this.dictionary.length,commonsense:this.commonsense.length,commonsenseRejected:this.commonsenseRejected,socialTopics:this.socialTopics.length,sources:this.sources.length,ready:this.ready,cachedWikipedia:this.wikipediaCache.size};}
   }
 
   const store=new KnowledgeStore();
   globalThis.npcKnowledge=store;
+  globalThis.NpcIntSubscribeCommonsense=listener=>store.subscribeCommonsense(listener);
+  const pending=globalThis.NpcIntPendingCommonsenseSubscribers;
+  if(Array.isArray(pending)){
+    globalThis.NpcIntPendingCommonsenseSubscribers=[];
+    for(const listener of pending)store.subscribeCommonsense(listener);
+  }
 
   function applyKnowledge(brain,q,hit){
     brain.dialogue.turn++;
@@ -251,7 +312,7 @@
     }
     if(h==="/knowledge"){
       const s=store.stats();
-      print("debug","KNOWLEDGE>",`ready=${s.ready} | conceptos_locales/cache=${s.concepts} | diccionario=${s.words} | temas_sociales=${s.socialTopics} | Wikipedia_cache=${s.cachedWikipedia} | packs=${s.sources}`);
+      print("debug","KNOWLEDGE>",`ready=${s.ready} | conceptos_locales/cache=${s.concepts} | diccionario=${s.words} | sentido_común=${s.commonsense} | rechazadas=${s.commonsenseRejected} | temas_sociales=${s.socialTopics} | Wikipedia_cache=${s.cachedWikipedia} | packs=${s.sources}`);
       return;
     }
     if(h==="/define"){

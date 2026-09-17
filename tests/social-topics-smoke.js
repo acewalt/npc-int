@@ -13,7 +13,7 @@ global.localStorage={getItem:k=>storage.has(k)?storage.get(k):null,setItem:(k,v)
 const pack=JSON.parse(fs.readFileSync(path.join(__dirname,"..","knowledge","social-topics.es.json"),"utf8"));
 require("../output-safety.js");
 assert.strictEqual(pack.version,1);
-assert.ok(Array.isArray(pack.topics)&&pack.topics.length>=12,"el banco debe tener variedad suficiente para rotar temas");
+assert.ok(Array.isArray(pack.topics)&&pack.topics.length>=60,"el banco debe conservar variedad suficiente para sesiones largas");
 assert.strictEqual(new Set(pack.topics.map(x=>x.id)).size,pack.topics.length,"los ids del banco deben ser únicos");
 for(const topic of pack.topics){
   for(const field of ["id","label","hook","opinion","followUp"])
@@ -26,6 +26,7 @@ for(const topic of pack.topics){
   assert.doesNotMatch(text,/no me dejes|solo yo te entiendo|me necesitas|no hables con nadie más/i);
   assert.doesNotMatch(text,/cuando era (?:niñ[oa]|humana)|recuerdo haber|he jugado|me pasó a mí|mi infancia/i,"los temas no deben inventar biografía humana");
 }
+assert.doesNotMatch(pack.topics.find(x=>x.id==="silence_as_action").opinion,/nada relevante que hablar/i,"el silencio debe estar redactado en español natural");
 
 global.npcKnowledge={socialTopics:pack.topics};
 require("../social-memory.js");
@@ -106,10 +107,29 @@ const dislikesAi=makeBrain();
 window.NpcIntSocialMemory.add(dislikesAi,"dislike","la IA",{importance:.82});
 assert.ok(!window.NpcIntInitiative.socialTopicCandidates(dislikesAi).some(x=>x.topicId==="local_ai"),"señales cortas significativas como IA no deben perderse en el matching");
 
+for(const [interest,expected] of [
+  ["arquitectura","architecture_and_behavior"],
+  ["mapas","maps_and_choices"],
+  ["música","music_for_moods"]
+]){
+  const affinityBrain=makeBrain();
+  window.NpcIntSocialMemory.add(affinityBrain,"like",interest,{importance:.82});
+  assert.strictEqual(window.NpcIntInitiative.socialTopicCandidates(affinityBrain)[0].topicId,expected,`«${interest}» debe privilegiar el label específico sobre tags auxiliares ambiguos`);
+}
+
 const unknownUser=makeBrain();
 social=window.NpcIntInitiative.socialTopicCandidates(unknownUser);
 assert.ok(social.length>0,"NIA debe poder proponer algo propio aunque todavía no conozca gustos del usuario");
 assert.match(social[0].reason,/tema propio/i);
+
+const coldRotation=makeBrain(),coldFamilies=[];
+for(let i=0;i<5;i++){
+  const next=window.NpcIntInitiative.socialTopicCandidates(coldRotation,{now:2_000_000+i})[0];
+  coldFamilies.push(next.family);
+  assert.ok(next.reasonCodes.includes("cold_start_family_priority"),"la prioridad por familia debe quedar explicada");
+  window.NpcIntInitiative.ensure(coldRotation).history.push({...next,wallMs:1,time:i});
+}
+assert.deepStrictEqual(coldFamilies,["everyday","culture","games","reflective","technical"],"los arranques en frío deben rotar familias en un orden estable antes de repetir una");
 
 const withPending=makeBrain();
 window.NpcIntPending.add(withPending,"project","terminar el prototipo de tres carriles",{priority:.78});

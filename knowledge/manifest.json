@@ -4,6 +4,7 @@
   "packs": [
     {"type":"encyclopedia","path":"knowledge/core.es.json"},
     {"type":"dictionary","path":"knowledge/dictionary.es.json"},
+    {"type":"commonsense","path":"knowledge/commonsense.es.json"},
     {"type":"social-topics","path":"knowledge/social-topics.es.json"}
   ]
 }

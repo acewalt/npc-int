@@ -160,29 +160,24 @@
   const oldReset=NpcBrain.prototype.reset;
   NpcBrain.prototype.reset=function(){oldReset.call(this);this.cognitiveState=null;ensureState(this);};
 
-  const oldHear=NpcBrain.prototype.hear;
-  NpcBrain.prototype.hear=function(text){
-    ensureState(this);
-    const result=oldHear.call(this,text);
-    const finish=answer=>{refresh(this,text);return answer;};
-    return result&&typeof result.then==="function"?result.then(finish):finish(result);
-  };
+  const pipeline=window.NpcIntPipeline;
+  if(!pipeline||typeof pipeline.register!=="function")
+    throw new Error("cognitive-state.js requiere brain-pipeline.js cargado previamente");
 
-  const oldEvent=NpcBrain.prototype.event;
-  NpcBrain.prototype.event=function(text){
-    ensureState(this);
-    const result=oldEvent.call(this,text);
-    const finish=answer=>{refresh(this,`Evento del mundo: ${text}`,{intent:"world_event"});return answer;};
-    return result&&typeof result.then==="function"?result.then(finish):finish(result);
-  };
-
-  const oldTick=NpcBrain.prototype.tick;
-  NpcBrain.prototype.tick=function(minutes=1){
-    ensureState(this);
-    const result=oldTick.call(this,minutes);
-    const finish=answer=>{refresh(this,"Paso del tiempo",{intent:"internal_tick"});return answer;};
-    return result&&typeof result.then==="function"?result.then(finish):finish(result);
-  };
+  for(const kind of ["hear","event","tick"]){
+    pipeline.register(kind,"cognitive-state:prepare",ctx=>{
+      ensureState(ctx.brain);
+    },{phase:"before",priority:100});
+  }
+  pipeline.register("hear","cognitive-state:refresh",ctx=>{
+    refresh(ctx.brain,ctx.args[0]);
+  },{phase:"after",priority:700});
+  pipeline.register("event","cognitive-state:refresh",ctx=>{
+    refresh(ctx.brain,`Evento del mundo: ${ctx.args[0]}`,{intent:"world_event"});
+  },{phase:"after",priority:700});
+  pipeline.register("tick","cognitive-state:refresh",ctx=>{
+    refresh(ctx.brain,"Paso del tiempo",{intent:"internal_tick"});
+  },{phase:"after",priority:700});
 
   const oldCommand=command;
   command=function(raw){
