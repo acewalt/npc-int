@@ -11,100 +11,165 @@ const RUNTIME_VERSION="transformers.js@3.7.1";
 let tokenizer=null;
 let model=null;
 let dtype=null;
+let device=null;
 let loadingPromise=null;
 let generationChain=Promise.resolve();
 const stoppingCriteria=new InterruptableStoppingCriteria();
 
-function isFatalRuntimeError(error){
-  const message=String(error?.message||error||"").toLowerCase();
+function messageOf(error){
+  return String(error?.message||error||"Error desconocido");
+}
+
+function isGpuRuntimeError(error){
+  const message=messageOf(error).toLowerCase();
   return message.includes("memory access out of bounds")||
     message.includes("out of memory")||
     message.includes("device lost")||
-    message.includes("gpu device");
+    message.includes("gpu device")||
+    message.includes("webgpu")||
+    message.includes("adapter");
 }
 
 function fail(error,requestId=null){
   self.postMessage({
     status:"error",
     requestId,
-    fatal:isFatalRuntimeError(error),
-    error:String(error?.message||error||"Error desconocido")
+    fatal:device!=="webgpu"&&isGpuRuntimeError(error),
+    device,
+    error:messageOf(error)
   });
 }
 
-async function selectDtype(){
-  const adapter=await navigator.gpu?.requestAdapter?.();
-  if(!adapter)throw new Error("WebGPU no está disponible o no se encontró un adaptador.");
-  return adapter.features?.has?.("shader-f16")?"q4f16":"q4";
+async function detectBackend(){
+  if(!navigator.gpu?.requestAdapter){
+    return {device:"wasm",dtype:"q4",webgpuAvailable:false,reason:"webgpu_api_unavailable"};
+  }
+  try{
+    const adapter=await navigator.gpu.requestAdapter();
+    if(!adapter){
+      return {device:"wasm",dtype:"q4",webgpuAvailable:false,reason:"adapter_unavailable"};
+    }
+    return {
+      device:"webgpu",
+      dtype:adapter.features?.has?.("shader-f16")?"q4f16":"q4",
+      webgpuAvailable:true,
+      reason:"adapter_ready"
+    };
+  }catch(error){
+    return {device:"wasm",dtype:"q4",webgpuAvailable:false,reason:"adapter_error",detail:messageOf(error)};
+  }
+}
+
+function progressCallback(x){
+  if(!x||typeof x!=="object")return;
+  if(x.status==="progress"){
+    self.postMessage({
+      status:"progress",
+      file:x.file||null,
+      progress:Number(x.progress)||0,
+      loaded:x.loaded||0,
+      total:x.total||0
+    });
+  }
+}
+
+async function disposeModel(){
+  if(!model)return;
+  try{
+    if(typeof model.dispose==="function")await model.dispose();
+  }catch(_){}
+  model=null;
+}
+
+async function buildModel(targetDevice,targetDtype,{fallbackReason=null}={}){
+  device=targetDevice;
+  dtype=targetDtype;
+
+  self.postMessage({
+    status:fallbackReason?"fallback":"backend",
+    device,
+    dtype,
+    webgpuAvailable:device==="webgpu",
+    reason:fallbackReason||"selected"
+  });
+
+  if(!tokenizer){
+    tokenizer=await AutoTokenizer.from_pretrained(MODEL_ID,{progress_callback:progressCallback});
+  }
+
+  model=await AutoModelForCausalLM.from_pretrained(MODEL_ID,{
+    dtype,
+    device,
+    progress_callback:progressCallback
+  });
+
+  self.postMessage({
+    status:"loading",
+    data:device==="webgpu"
+      ?"Compilando shaders y verificando generación WebGPU..."
+      :"Verificando generación CPU/WASM..."
+  });
+
+  const warmupMessages=[
+    {role:"system",content:"Responde de forma breve."},
+    {role:"user",content:"Hola"}
+  ];
+  const warmup=tokenizer.apply_chat_template(warmupMessages,{
+    add_generation_prompt:true,
+    return_dict:true,
+    enable_thinking:false
+  });
+  await model.generate({
+    ...warmup,
+    max_new_tokens:1,
+    do_sample:false,
+    return_dict_in_generate:true
+  });
 }
 
 async function load(){
-  if(tokenizer&&model)return {tokenizer,model,dtype};
+  if(tokenizer&&model)return {tokenizer,model,dtype,device};
   if(loadingPromise)return loadingPromise;
 
   loadingPromise=(async()=>{
-    self.postMessage({status:"loading",data:"Descargando Qwen3-0.6B..."});
-    dtype=await selectDtype();
+    self.postMessage({status:"loading",data:"Preparando Qwen3-0.6B..."});
+    const preferred=await detectBackend();
 
-    const progress_callback=x=>{
-      if(!x||typeof x!=="object")return;
-      if(x.status==="progress"){
-        self.postMessage({
-          status:"progress",
-          file:x.file||null,
-          progress:Number(x.progress)||0,
-          loaded:x.loaded||0,
-          total:x.total||0
-        });
-      }
-    };
+    try{
+      await buildModel(preferred.device,preferred.dtype);
+    }catch(error){
+      if(preferred.device!=="webgpu")throw error;
 
-    const tokenizerPromise=AutoTokenizer.from_pretrained(MODEL_ID,{progress_callback});
-    const modelPromise=AutoModelForCausalLM.from_pretrained(MODEL_ID,{
-      dtype,
-      device:"webgpu",
-      progress_callback
-    });
-
-    [tokenizer,model]=await Promise.all([tokenizerPromise,modelPromise]);
-
-    self.postMessage({status:"loading",data:"Compilando shaders y verificando generación..."});
-
-    // El warmup usa la misma ruta de chat que una respuesta real. Así "ready"
-    // significa que no solo cargó los pesos, sino que pudo ejecutar generate().
-    const warmupMessages=[
-      {role:"system",content:"Responde de forma breve."},
-      {role:"user",content:"Hola"}
-    ];
-    const warmup=tokenizer.apply_chat_template(warmupMessages,{
-      add_generation_prompt:true,
-      return_dict:true,
-      enable_thinking:false
-    });
-    await model.generate({
-      ...warmup,
-      max_new_tokens:1,
-      do_sample:false,
-      return_dict_in_generate:true
-    });
+      const reason="webgpu_load_failed: "+messageOf(error);
+      await disposeModel();
+      self.postMessage({
+        status:"fallback",
+        device:"wasm",
+        dtype:"q4",
+        webgpuAvailable:false,
+        reason
+      });
+      await buildModel("wasm","q4",{fallbackReason:reason});
+    }
 
     self.postMessage({
       status:"ready",
       modelId:MODEL_ID,
-      device:"webgpu",
+      device,
       dtype,
+      webgpuAvailable:device==="webgpu",
       runtimeVersion:RUNTIME_VERSION
     });
 
-    return {tokenizer,model,dtype};
+    return {tokenizer,model,dtype,device};
   })();
 
   try{
     return await loadingPromise;
   }catch(error){
-    tokenizer=null;
-    model=null;
+    await disposeModel();
     dtype=null;
+    device=null;
     throw error;
   }finally{
     loadingPromise=null;
@@ -118,47 +183,82 @@ function clean(text){
     .trim();
 }
 
+async function runGeneration(data,requestId){
+  const messages=Array.isArray(data?.messages)?data.messages:[];
+  if(!messages.length)throw new Error("No se recibió contexto para generar.");
+
+  const inputs=tokenizer.apply_chat_template(messages,{
+    add_generation_prompt:true,
+    return_dict:true,
+    enable_thinking:false
+  });
+
+  const dims=inputs?.input_ids?.dims;
+  const inputTokens=Array.isArray(dims)&&dims.length?Number(dims[dims.length-1]):null;
+  self.postMessage({
+    status:"generation-start",
+    requestId,
+    inputTokens:Number.isFinite(inputTokens)?inputTokens:null,
+    device
+  });
+
+  let output="";
+  const streamer=new TextStreamer(tokenizer,{
+    skip_prompt:true,
+    skip_special_tokens:true,
+    callback_function:chunk=>{output+=chunk;}
+  });
+
+  await model.generate({
+    ...inputs,
+    do_sample:true,
+    temperature:Number(data?.temperature)||0.55,
+    top_k:Number(data?.topK)||20,
+    max_new_tokens:Number(data?.maxNewTokens)||180,
+    streamer,
+    stopping_criteria:stoppingCriteria,
+    return_dict_in_generate:true
+  });
+
+  return clean(output);
+}
+
+async function switchToWasm(reason){
+  await disposeModel();
+  self.postMessage({
+    status:"fallback",
+    device:"wasm",
+    dtype:"q4",
+    webgpuAvailable:false,
+    reason:"runtime_webgpu_failed: "+messageOf(reason)
+  });
+  await buildModel("wasm","q4",{fallbackReason:"runtime_webgpu_failed: "+messageOf(reason)});
+  self.postMessage({
+    status:"ready",
+    modelId:MODEL_ID,
+    device,
+    dtype,
+    webgpuAvailable:false,
+    runtimeVersion:RUNTIME_VERSION
+  });
+}
+
 async function generate(requestId,data){
   try{
     await load();
     stoppingCriteria.reset();
 
-    const messages=Array.isArray(data?.messages)?data.messages:[];
-    if(!messages.length)throw new Error("No se recibió contexto para generar.");
+    let text;
+    try{
+      text=await runGeneration(data,requestId);
+    }catch(error){
+      if(device!=="webgpu"||!isGpuRuntimeError(error))throw error;
+      await switchToWasm(error);
+      stoppingCriteria.reset();
+      text=await runGeneration(data,requestId);
+    }
 
-    const inputs=tokenizer.apply_chat_template(messages,{
-      add_generation_prompt:true,
-      return_dict:true,
-      enable_thinking:false
-    });
-
-    const dims=inputs?.input_ids?.dims;
-    const inputTokens=Array.isArray(dims)&&dims.length?Number(dims[dims.length-1]):null;
-    self.postMessage({
-      status:"generation-start",
-      requestId,
-      inputTokens:Number.isFinite(inputTokens)?inputTokens:null
-    });
-
-    let output="";
-    const streamer=new TextStreamer(tokenizer,{
-      skip_prompt:true,
-      skip_special_tokens:true,
-      callback_function:chunk=>{output+=chunk;}
-    });
-
-    await model.generate({
-      ...inputs,
-      do_sample:true,
-      temperature:Number(data?.temperature)||0.55,
-      top_k:Number(data?.topK)||20,
-      max_new_tokens:Number(data?.maxNewTokens)||180,
-      streamer,
-      stopping_criteria:stoppingCriteria,
-      return_dict_in_generate:true
-    });
-
-    self.postMessage({status:"result",requestId,text:clean(output)});
+    self.postMessage({status:"result",requestId,text,device});
   }catch(error){
     fail(error,requestId);
   }
