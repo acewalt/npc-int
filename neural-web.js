@@ -398,7 +398,11 @@
   command=function(raw){
     const parts=raw.trim().split(/\s+/);
     const head=(parts.shift()||"").toLowerCase();
-    if(head!=="/neural")return oldCommand(raw);
+    if(head!=="/neural"){
+      const result=oldCommand(raw);
+      if(head==="/reset")state.turns=[];
+      return result;
+    }
     const sub=(parts.shift()||"status").toLowerCase();
 
     if(sub==="on"){
