@@ -4,6 +4,7 @@
   const button=document.getElementById("copyChat");
   const terminal=document.getElementById("terminal");
   if(!button||!terminal)return;
+  if(typeof button.addEventListener!=="function"||typeof button.querySelector!=="function"||typeof terminal.querySelectorAll!=="function")return;
 
   const label=button.querySelector(".copy-chat-label");
   const defaultLabelMarkup=label?.innerHTML||"Copiar";
