@@ -1,7 +1,7 @@
 "use strict";
 
 (function(){
-  const state={enabled:false,mode:"qwen",endpoint:"http://127.0.0.1:8765",ready:false,bridgeReady:false,backend:null,model:null,checking:false,lastError:null,lastGuard:null,turns:[]};
+  const state={enabled:false,mode:"qwen",endpoint:"http://127.0.0.1:8765",ready:false,bridgeReady:false,backend:null,model:null,checking:false,lastError:null,lastGuard:null,lastOutputWallMs:0,turns:[]};
   const qwenButton=document.getElementById("qwenToggle");
   const qwenButtonLabel=document.getElementById("qwenToggleLabel");
 
@@ -145,11 +145,13 @@
     if(!mode.needsHistory){
       const stale=staleTurnTokens(userText);
       const draftTokens=turnTokens(symbolicDraft||"");
-      let staleHits=0;
+      let staleHits=0,currentHits=0;
+      const currentTokens=turnTokens(userText);
       for(const token of turnTokens(output)){
+        if(currentTokens.has(token))currentHits++;
         if(stale.has(token)&&!draftTokens.has(token))staleHits++;
       }
-      if(staleHits>=2&&tokenOverlap(userText,output)<.20){
+      if(staleHits>=2&&staleHits>currentHits){
         return {ok:false,reason:"stale_context_contamination"};
       }
     }
@@ -454,9 +456,10 @@
     }
     try{
       const out=await q.generate(browserMessages(userText,symbolicDraft),{
-        maxNewTokens:180,
-        temperature:.55,
-        topK:20
+        maxNewTokens:120,
+        temperature:.3,
+        topK:10,
+        doSample:false
       });
       const text=String(out||"")
         .replace(/<think>[\s\S]*?<\/think>/gi,"")
@@ -583,6 +586,8 @@
     if(!neuralReply&&state.lastError)print("system","NEURAL>",`capa neuronal no respondió; fallback simbólico · ${state.lastError}`);
     if(output){
       recordNeuralTurn(text,output);
+      state.lastOutputWallMs=Date.now();
+      window.NpcIntSocialTiming?.noteNpc?.(brain,state.lastOutputWallMs,false);
       window.setTimeout(()=>print("npc",brain.identity.name+">",output),120);
     }
   };
