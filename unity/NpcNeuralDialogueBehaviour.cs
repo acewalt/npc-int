@@ -13,6 +13,7 @@ public sealed class NpcNeuralDialogueBehaviour : MonoBehaviour
     [SerializeField] private NanochatBridgeClient neuralClient;
     [SerializeField] private bool generateOnlyForLanguageActions = true;
     [SerializeField] private bool logNeuralSpeech = true;
+    [SerializeField] private bool enforceCompanionOutputSafety = true;
     [SerializeField] private StringEvent onNeuralUtterance = new StringEvent();
 
     private CancellationTokenSource _cts;
@@ -70,10 +71,19 @@ public sealed class NpcNeuralDialogueBehaviour : MonoBehaviour
                 return;
             }
 
-            if (logNeuralSpeech)
-                Debug.Log(name + " [neural/" + response.backend + "]: " + response.text);
+            string symbolicFallback = turn != null && turn.Action != null ? turn.Action.Utterance : null;
+            string utterance = enforceCompanionOutputSafety
+                ? CompanionOutputSafety.Sanitize(response.text, symbolicFallback)
+                : response.text.Trim();
 
-            onNeuralUtterance.Invoke(response.text);
+            if (logNeuralSpeech)
+            {
+                OutputSafetyResult safety = CompanionOutputSafety.Inspect(response.text);
+                string suffix = safety.Safe ? string.Empty : " [filtered: " + string.Join(",", safety.Hits) + "]";
+                Debug.Log(name + " [neural/" + response.backend + "]: " + utterance + suffix);
+            }
+
+            onNeuralUtterance.Invoke(utterance);
         }
         catch (OperationCanceledException)
         {
