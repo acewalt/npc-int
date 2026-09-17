@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://acewalt.github.io/npc-int/contracts/concept.v1.schema.json",
+  "title": "NPC-INT concept identity v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "type", "label", "language", "aliases"],
+  "properties": {
+    "id": {"type": "string", "pattern": "^concept:[a-z][a-z0-9_-]*:[a-z0-9ñ_]+$"},
+    "type": {"type": "string", "minLength": 2},
+    "label": {"type": "string", "minLength": 1},
+    "language": {"type": "string", "minLength": 2},
+    "aliases": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+    "sources": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true}
+  }
+}
