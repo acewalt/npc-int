@@ -6,6 +6,7 @@
 
   function detectAffect(text){
     const n=norm(text);
+    if(/\b(?:mi|el|la)\s+(?:perro|perra|gato|gata|mascota)\b[\s\S]*\b(?:murio|murió|fallecio|falleció|se murio|se murió)\b/.test(n) || /\b(?:murio|murió|fallecio|falleció)\b[\s\S]*\b(?:mi )?(?:perro|perra|gato|gata|mascota)\b/.test(n))return {kind:"grief",confidence:.99};
     if(/\b(?:me siento|estoy|ando)\s+(?:muy )?(?:solo|sola|aislado|aislada)\b/.test(n))return {kind:"loneliness",confidence:.98};
     if(/\b(?:me siento|estoy|ando)\s+(?:muy )?(?:triste|decaido|decaida|mal)\b/.test(n))return {kind:"low_mood",confidence:.90};
     if(/\b(?:estoy|ando)\s+(?:muy )?(?:aburrido|aburrida)\b/.test(n))return {kind:"boredom",confidence:.96};
@@ -15,6 +16,7 @@
 
   function classify(text){
     const n=norm(text),affect=detectAffect(text);
+    if(affect?.kind==="grief")return {intent:"express_grief",affect,asksProposal:false};
     if(affect?.kind==="loneliness")return {intent:"express_loneliness",affect,asksProposal:/\b(?:que propones|que hacemos|que podria hacer|que hacemos ahora)\b/.test(n)};
     if(affect?.kind==="low_mood")return {intent:"express_low_mood",affect,asksProposal:/\b(?:que propones|que hago|que hacemos)\b/.test(n)};
     if(affect?.kind==="boredom")return {intent:"express_boredom",affect,asksProposal:true};
@@ -38,6 +40,10 @@
     const thread=meaningfulThread(b);
     if(thread)return `Me gustaría hacer algo que tenga continuidad contigo. Podemos retomar «${clip(thread.text)}» y avanzar una parte concreta, en vez de inventar una acción solo para parecer activa.`;
     return "Me gustaría investigar o construir algo contigo: una situación con pistas, un problema que podamos descomponer o una idea que podamos poner a prueba. Si tengo que escoger una, elegiría una situación donde lo que decidamos tenga consecuencias y podamos aprender de ellas.";
+  }
+
+  function griefAnswer(){
+    return "Lo siento. Si ocurrió ayer, es algo muy reciente. No voy a tratarlo como algo emocionante ni mezclarlo con otros temas. Si quieres hablar de tu mascota o contarme qué pasó, te escucho; y si prefieres cambiar de tema, también está bien.";
   }
 
   function lonelinessAnswer(b,frame){
@@ -65,6 +71,7 @@
 
   function answer(b,frame){
     switch(frame.intent){
+      case "express_grief":return griefAnswer();
       case "ask_companion_activity":return desiredActivityAnswer(b);
       case "express_loneliness":return lonelinessAnswer(b,frame);
       case "express_low_mood":return lowMoodAnswer(b,frame);
@@ -98,6 +105,6 @@
     return lower&&typeof lower.then==="function"?lower.then(finish):finish(lower);
   };
 
-  window.NpcIntCompanionRefinement={classify,detectAffect,answer,desiredActivityAnswer,meaningfulThread};
-  print("system","","companion refinement v1.0 cargado · estados transitorios + propuestas + actividad propia");
+  window.NpcIntCompanionRefinement={classify,detectAffect,answer,desiredActivityAnswer,meaningfulThread,griefAnswer};
+  print("system","","companion refinement v1.1 cargado · duelo + estados transitorios + propuestas + actividad propia");
 })();
