@@ -97,11 +97,11 @@ async function buildModel(targetDevice,targetDtype,{fallbackReason=null}={}){
     tokenizer=await AutoTokenizer.from_pretrained(MODEL_ID,{progress_callback:progressCallback});
   }
 
-  model=await AutoModelForCausalLM.from_pretrained(MODEL_ID,{
-    dtype,
-    device,
-    progress_callback:progressCallback
-  });
+  const modelOptions={dtype,progress_callback:progressCallback};
+  // Transformers.js usa CPU/WASM por defecto en navegador. Solo fijamos device
+  // cuando realmente existe un adaptador WebGPU válido.
+  if(targetDevice==="webgpu")modelOptions.device="webgpu";
+  model=await AutoModelForCausalLM.from_pretrained(MODEL_ID,modelOptions);
 
   self.postMessage({
     status:"loading",
