@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "scenarios": [
+    {
+      "id": "user_question_curiosity",
+      "kind": "user",
+      "text": "¿Qué ocurrió con la puerta?",
+      "state": {"hunger": 0.18, "energy": 0.88, "curiosity": 0.78, "fear": 0.04, "trust": 0.55}
+    },
+    {
+      "id": "world_clear_danger",
+      "kind": "world",
+      "text": "Hay fuego, peligro y una amenaza junto a la puerta.",
+      "state": {"hunger": 0.18, "energy": 0.88, "curiosity": 0.55, "fear": 0.08, "trust": 0.50}
+    },
+    {
+      "id": "world_food_hungry",
+      "kind": "world",
+      "text": "Hay comida, pan y fruta sobre la mesa.",
+      "state": {"hunger": 0.90, "energy": 0.80, "curiosity": 0.25, "fear": 0.02, "trust": 0.50}
+    },
+    {
+      "id": "idle_hungry",
+      "kind": "time",
+      "minutes": 1,
+      "text": "Pasó tiempo sin un estímulo externo.",
+      "state": {"hunger": 0.92, "energy": 0.82, "curiosity": 0.20, "fear": 0.02, "trust": 0.50}
+    },
+    {
+      "id": "idle_tired",
+      "kind": "time",
+      "minutes": 1,
+      "text": "Pasó tiempo sin un estímulo externo.",
+      "state": {"hunger": 0.10, "energy": 0.22, "curiosity": 0.18, "fear": 0.02, "trust": 0.50}
+    },
+    {
+      "id": "user_hostility_low_trust",
+      "kind": "user",
+      "text": "Eres un idiota, cállate.",
+      "state": {"hunger": 0.18, "energy": 0.88, "curiosity": 0.32, "fear": 0.08, "trust": 0.20}
+    }
+  ]
+}
