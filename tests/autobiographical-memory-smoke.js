@@ -77,7 +77,7 @@ assert.deepEqual(pet.data.when,{type:"user_age",age:8});
 
 out=b.hear("te creé con la finalidad de crear algo similar a un director de juego dinámico");
 assert.match(out,/me creaste con la finalidad/i);
-assert.match(out,/director de juego dinámico/i);
+assert.match(out,/director de juego din[aá]mico/i);
 assert.match(b.selfModel.creatorIntent,/director de juego dinamico/i);
 
 out=b.hear("me gusta el color negro");
