@@ -61,7 +61,8 @@
     const facts=b.cognition.facts;
     let added=0;
 
-    // Herencia simple: A es B, B es C => A es C.
+    // La inferencia local opera solo sobre hechos personales/conversacionales.
+    // El conocimiento general vive en CommonsenseStore y se consulta por retrieval.
     const isa=facts.filter(f=>f.active!==false&&(f.predicate==="es_un"||f.predicate==="es"));
     for(const a of isa){
       for(const c of isa){
@@ -72,7 +73,6 @@
       }
     }
 
-    // Inferencia instrumental muy pequeña: alguien tiene una llave + puerta cerrada.
     const hasKey=facts.find(f=>f.active!==false&&f.predicate==="tiene"&&/llave/i.test(f.object));
     const closedDoor=facts.find(f=>f.active!==false&&f.predicate==="estado"&&/puerta/i.test(f.subject)&&/cerrad/i.test(f.object));
     if(hasKey&&closedDoor){
@@ -111,6 +111,12 @@
     return [];
   }
 
+  function externalRelation(subject,predicate,object){
+    try{
+      return globalThis.NpcIntKnowledgeArchitecture?.queryRelation?.(subject,predicate,object,{maxDepth:3})||null;
+    }catch(_){return null;}
+  }
+
   function answerCognitiveQuery(b,text){
     ensureCognition(b);
     const n=CNorm(text);
@@ -123,7 +129,7 @@
       const fs=factsAbout(b,topic).slice(0,5);
       if(!fs.length)return null;
       const body=fs.map(f=>`${f.subject} ${f.predicate.replaceAll("_"," ")} ${f.object}${f.conflict?" [hay información conflictiva]":""}`).join("; ");
-      return b.say(`Sobre ${topic}, tengo estas relaciones: ${body}.`);
+      return b.say(`Sobre ${topic}, tengo estas relaciones personales/conversacionales: ${body}.`);
     }
 
     if(/^(que harias|que piensas hacer|que vas a hacer|que puedo hacer|que hacemos|y ahora que)\b/.test(n)){
@@ -140,7 +146,14 @@
       const subject=cleanEntity(m[1]), object=cleanEntity(m[2]);
       infer(b);
       const f=b.cognition.facts.find(x=>x.active!==false&&CNorm(x.subject)===CNorm(subject)&&(x.predicate==="es"||x.predicate==="es_un")&&CNorm(x.object)===CNorm(object));
-      if(f)return b.say(`Con mis hechos actuales, sí: relaciono ${subject} con ${object}. Mi confianza es ${Math.round(f.confidence*100)}%.`);
+      if(f)return b.say(`Con mis hechos personales actuales, sí: relaciono ${subject} con ${object}. Mi confianza es ${Math.round(f.confidence*100)}%.`);
+
+      const external=externalRelation(subject,"es_un",object)||externalRelation(subject,"es",object);
+      if(external?.matched){
+        const route=(external.path||[]).map(id=>globalThis.NpcIntKnowledgeArchitecture?.registry?.label?.(id)||id).join(" → ");
+        const routeText=external.derived&&route?` La relación se obtiene por la ruta ${route}.`:"";
+        return b.say(`Según mi conocimiento general, sí: ${subject} se relaciona con ${object}.${routeText}`);
+      }
     }
 
     return null;
@@ -148,13 +161,14 @@
 
   function importCommonsense(b,relations,meta={},announce=false){
     ensureCognition(b);
-    for(const r of relations||[])addFact(b,r.subject,r.predicate,r.object,r.confidence??.7,"commonsense",false);
+    // v2: Cognition ya no copia relaciones generales dentro de facts[].
+    // Solo conserva estado de carga para compatibilidad/diagnóstico.
     b.cognition.loaded=meta.ready!==false;
     b.cognition.commonsenseCount=(relations||[]).length;
     b.cognition.commonsenseSource=meta.source||"knowledge/commonsense.es.json";
     if(announce){
       const rejected=meta.rejected?` · ${meta.rejected} rechazadas por contrato`:"";
-      print("system","",`razonamiento v0.2 cargado · ${b.cognition.commonsenseCount} relaciones base${rejected} · hechos + inferencia + opciones`);
+      print("system","",`razonamiento v0.3 cargado · ${b.cognition.commonsenseCount} relaciones externas${rejected} · facts reservado a memoria/hechos + inferencia local`);
     }
   }
 
@@ -191,7 +205,7 @@
     if(cognitiveAnswer){
       this.remember("dialogue",`${this.relation.name}: ${q}`,.60);
       this.thoughts(`${this.relation.name} formuló una consulta sobre hechos/acciones: «${short(q,100)}»`);
-      this.lastThoughts.splice(1,0,"COGNICIÓN: respuesta construida desde relaciones e inferencias internas");
+      this.lastThoughts.splice(1,0,"COGNICIÓN: respuesta construida separando memoria personal de conocimiento general");
       return cognitiveAnswer;
     }
 
@@ -204,7 +218,7 @@
       if(this.lastThoughts)this.lastThoughts.splice(2,0,`HECHOS: ${summary}`);
 
       if(typeof result==="string" && /^(Entiendo\.|Vale, lo tengo en cuenta\.|Te sigo\.|Queda en el contexto|Eso cambia un poco|Lo tengo\.)/i.test(result)){
-        return this.say(`Entiendo. Lo convertí en un hecho utilizable: ${summary}.`);
+        return this.say(`Entiendo. Lo convertí en un hecho personal utilizable: ${summary}.`);
       }
     }
     return result;
@@ -218,13 +232,13 @@
     if(h==="/beliefs"||h==="/facts"){
       ensureCognition(brain);
       const fs=(arg?factsAbout(brain,arg):brain.cognition.facts.slice(-20)).slice(-20);
-      print("debug","FACTS>",fs.length?fs.map(f=>`#${f.id} ${f.subject} --${f.predicate}--> ${f.object} | ${Math.round(f.confidence*100)}% | ${f.source}${f.derived?" | inferido":""}${f.conflict?" | CONFLICTO":""}`).join("\n"):"No hay hechos para mostrar.");
+      print("debug","FACTS>",fs.length?fs.map(f=>`#${f.id} ${f.subject} --${f.predicate}--> ${f.object} | ${Math.round(f.confidence*100)}% | ${f.source}${f.derived?" | inferido":""}${f.conflict?" | CONFLICTO":""}`).join("\n"):"No hay hechos personales/conversacionales para mostrar.");
       return;
     }
     if(h==="/infer"){
       const n=infer(brain);
       const options=planFromState(brain);
-      print("debug","INFER>",`inferencias nuevas=${n}\nopciones=${options.length?options.map(x=>`${x.text} (${Math.round(x.confidence*100)}%)`).join(" | "):"ninguna"}`);
+      print("debug","INFER>",`inferencias personales nuevas=${n}\nopciones=${options.length?options.map(x=>`${x.text} (${Math.round(x.confidence*100)}%)`).join(" | "):"ninguna"}`);
       return;
     }
     return oldCommand(raw);
