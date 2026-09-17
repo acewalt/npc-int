@@ -7,20 +7,7 @@ global.print=()=>{};
 global.command=()=>{};
 global.short=(s,n=100)=>{s=String(s||"");return s.length<=n?s:s.slice(0,n-1)+"…";};
 
-global.npcKnowledge={
-  encyclopedia:[
-    {id:"ia",title:"Inteligencia artificial",aliases:["IA"],tags:["informática","sistemas"],text:"La inteligencia artificial estudia sistemas capaces de realizar tareas complejas."},
-    {id:"filosofia",title:"Filosofía",aliases:[],tags:["ideas","pensamiento"],text:"La filosofía estudia problemas generales sobre conocimiento, existencia y valores."}
-  ],
-  dictionary:[],
-  isDefinitionQuery(text){return /^(que es|que son|que significa|define|explica|dime sobre|hablame de|para que sirve|quien es|quien fue)\b/.test(norm(text));},
-  isFactualQuery(text){return /^(que es|que son|que significa|quien es|quien fue|donde esta|donde queda|cuando fue|cuando ocurrio|cuantos|cuantas|define|explica|dime sobre|hablame de|para que sirve)\b/.test(norm(text));},
-  encyclopediaMatch(){return null;},
-  localAnswer(text){
-    const k=this.encyclopediaMatch(text);
-    return k&&k.score>.58?{kind:"encyclopedia",title:k.entry.title,text:k.entry.text,confidence:k.score,source:"test"}:null;
-  }
-};
+global.npcKnowledge=null;
 
 function norm(s){return String(s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9ñ ]+/g," ").replace(/\s+/g," ").trim();}
 
@@ -61,12 +48,7 @@ global.brain=new NpcBrain();
 
 require("../conversation-quality.js");
 
-// El alias corto IA no puede coincidir dentro de "gustaría".
-assert.equal(global.npcKnowledge.encyclopediaMatch("Y te gustaría conocer a alguien más?"),null);
-const ia=global.npcKnowledge.encyclopediaMatch("¿Qué es IA?");
-assert.ok(ia&&ia.entry.id==="ia"&&ia.score>.9,"IA debe seguir funcionando como token exacto");
-assert.equal(global.npcKnowledge.localAnswer("Y te gustaría conocer a alguien más?"),null,"una pregunta social no debe abrir la enciclopedia");
-assert.equal(global.npcKnowledge.localAnswer("¿Qué es IA?").title,"Inteligencia artificial");
+assert.equal(global.NpcIntConversationQuality.config.knowledgeMatching,"native:knowledge.js");
 
 const b=global.brain;
 

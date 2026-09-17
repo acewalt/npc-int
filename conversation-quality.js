@@ -3,81 +3,13 @@
 (function(){
   const QNorm=s=>String(s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9ñ ]+/g," ").replace(/\s+/g," ").trim();
   const INTERNAL_FOCUS=/^(paso del tiempo|tiempo|silencio|estado interno|inactividad|ciclo interno|paso de tiempo)$/;
-  const SHORT_ALIASES=new Set(["ia","ui","ux","vr","ar","2d","3d"]);
-  const KNOWLEDGE_STOP=new Set(["que","es","son","un","una","el","la","los","las","de","del","y","o","en","para","por","como","me","dime","explica","define","significa","sobre","hablame"]);
-  const MIN_ALIAS_LENGTH_FOR_SUBSTRING_MATCH=4;
 
   const clip=(s,n=120)=>{s=String(s||"").trim();return s.length<=n?s:s.slice(0,n-1).trim()+"…";};
-  const words=s=>QNorm(s).split(" ").filter(Boolean);
-  const knowledgeTokens=s=>words(s).filter(w=>(w.length>2||SHORT_ALIASES.has(w))&&!KNOWLEDGE_STOP.has(w));
-  const phraseIn=(query,phrase)=>{
-    const q=QNorm(query),p=QNorm(phrase);
-    return !!p && (` ${q} `).includes(` ${p} `);
-  };
   const isInternalFocus=value=>INTERNAL_FOCUS.test(QNorm(value));
-
-  function patchKnowledgeStore(){
-    const store=globalThis.npcKnowledge;
-    if(!store||store.__conversationQualityPatched)return false;
-
-    store.__conversationQualityPatched=true;
-    store.matchingConfig={
-      ...(store.matchingConfig||{}),
-      minAliasLengthForSubstringMatch:MIN_ALIAS_LENGTH_FOR_SUBSTRING_MATCH,
-      shortAliasesRequireExactToken:true
-    };
-
-    store.encyclopediaMatch=function(query){
-      const q=QNorm(query),qt=knowledgeTokens(query);
-      let best=null,score=0;
-
-      for(const entry of this.encyclopedia||[]){
-        const names=[entry.title,...(entry.aliases||[])].filter(Boolean);
-        let current=0;
-
-        for(const name of names){
-          const n=QNorm(name);
-          if(!n)continue;
-          if(q===n){
-            current=Math.max(current,1);
-            continue;
-          }
-
-          // No se permite coincidencia dentro de otra palabra. Las siglas cortas
-          // como IA, UI o 3D solo cuentan cuando aparecen como token/frase exacta.
-          if(phraseIn(q,n)){
-            const shortAlias=n.length<MIN_ALIAS_LENGTH_FOR_SUBSTRING_MATCH || SHORT_ALIASES.has(n);
-            current=Math.max(current,shortAlias?.95:.88+Math.min(.08,n.length/100));
-          }
-        }
-
-        const hay=knowledgeTokens(`${entry.title||""} ${(entry.aliases||[]).join(" ")} ${(entry.tags||[]).join(" ")}`);
-        if(qt.length){
-          const bag=new Set(hay);
-          const hit=qt.filter(t=>bag.has(t)).length;
-          current=Math.max(current,hit/qt.length*.78);
-        }
-
-        if(current>score){score=current;best=entry;}
-      }
-      return best?{entry:best,score}:null;
-    };
-
-    const originalLocalAnswer=typeof store.localAnswer==="function"?store.localAnswer.bind(store):null;
-    if(originalLocalAnswer){
-      store.localAnswer=function(text){
-        // Una interrogación no convierte una frase en consulta enciclopédica.
-        // El camino de conocimiento local solo se abre para intención factual.
-        if(!this.isFactualQuery?.(text) && !this.isDefinitionQuery?.(text))return null;
-        return originalLocalAnswer(text);
-      };
-    }
-    return true;
-  }
 
   function ensure(b){
     if(b.conversationQuality)return b.conversationQuality;
-    b.conversationQuality={version:1,turns:0,variation:0,lastIntent:null,lastRepair:null,lastReply:null};
+    b.conversationQuality={version:2,turns:0,variation:0,lastIntent:null,lastRepair:null,lastReply:null};
     return b.conversationQuality;
   }
 
@@ -230,8 +162,6 @@
     return out;
   }
 
-  patchKnowledgeStore();
-
   const oldReset=NpcBrain.prototype.reset;
   NpcBrain.prototype.reset=function(){
     oldReset.call(this);
@@ -241,7 +171,6 @@
 
   const oldHear=NpcBrain.prototype.hear;
   NpcBrain.prototype.hear=function(text){
-    patchKnowledgeStore();
     const quality=ensure(this),raw=String(text||"").trim(),frame=classify(raw);
     const ctx={
       priorUser:this.dialogue?.lastUser || this.companionState?.lastUserText || this.discourse?.currentUser || "",
@@ -280,10 +209,10 @@
   };
 
   window.NpcIntConversationQuality={
-    classify,refine,isInternalFocus,patchKnowledgeStore,
-    config:{minAliasLengthForSubstringMatch:MIN_ALIAS_LENGTH_FOR_SUBSTRING_MATCH,shortAliases:[...SHORT_ALIASES]}
+    classify,refine,isInternalFocus,
+    config:{knowledgeMatching:"native:knowledge.js"}
   };
 
   ensure(brain);
-  print("system","","calidad conversacional v1.0 cargada · reparación de respuestas + conocimiento token-safe + filtros de foco interno");
+  print("system","","calidad conversacional v1.1 cargada · reparación de respuestas + filtros de foco interno");
 })();

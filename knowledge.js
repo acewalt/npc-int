@@ -3,8 +3,15 @@
 (function(){
   const KNorm=s=>(s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9ñ ]+/g," ").replace(/\s+/g," ").trim();
   const KStop=new Set(["que","qué","es","son","un","una","el","la","los","las","de","del","y","o","en","para","por","como","cómo","me","dime","explica","define","significa","sobre","hablame","háblame"]);
-  const KTokens=s=>KNorm(s).split(" ").filter(w=>w.length>2&&!KStop.has(w));
+  const KShortAliases=new Set(["ia","ui","ux","vr","ar","2d","3d"]);
+  const KMinAliasLengthForSubstringMatch=4;
+  const KTokens=s=>KNorm(s).split(" ").filter(w=>(w.length>2||KShortAliases.has(w))&&!KStop.has(w));
   const KId=s=>KNorm(String(s||"").replaceAll("_"," ")).replace(/ /g,"_");
+  const KPhraseIn=(query,phrase)=>{
+    const q=KNorm(query),p=KNorm(phrase);
+    return !!p&&(` ${q} `).includes(` ${p} `);
+  };
+  const KSelfRelative=text=>/\b(?:para ti|para vos|segun tu|segun ti)\b/.test(KNorm(text));
 
   function validCommonsenseRelation(value){
     if(!value||typeof value!=="object"||Array.isArray(value))return false;
@@ -29,6 +36,11 @@
       this.ready=false;
       this.sources=[];
       this.wikipediaCache=new Map();
+      this.matchingConfig={
+        nativeTokenSafe:true,
+        minAliasLengthForSubstringMatch:KMinAliasLengthForSubstringMatch,
+        shortAliasesRequireExactToken:true
+      };
     }
 
     subscribeCommonsense(listener){
@@ -83,7 +95,7 @@
         }
         this.publishCommonsense();
         this.ready=true;
-        print("system","",`conocimiento v0.4 cargado · ${this.encyclopedia.length} conceptos · ${this.dictionary.length} entradas léxicas · ${this.commonsense.length} relaciones de sentido común · ${this.socialTopics.length} temas sociales · Wikipedia online disponible`);
+        print("system","",`conocimiento v0.5 cargado · ${this.encyclopedia.length} conceptos · ${this.dictionary.length} entradas léxicas · ${this.commonsense.length} relaciones de sentido común · ${this.socialTopics.length} temas sociales · Wikipedia online disponible`);
       }catch(err){
         console.warn("Knowledge load failed",err);
         print("error","KNOWLEDGE>","no pude cargar los packs locales; Wikipedia online seguirá disponible si hay conexión");
@@ -100,7 +112,7 @@
           const nv=KNorm(v);
           let s=0;
           if(q===nv)s=1;
-          else if(q.includes(nv))s=.86+Math.min(.1,nv.length/100);
+          else if(KPhraseIn(q,nv))s=.86+Math.min(.1,nv.length/100);
           if(s>score){score=s;best=e;}
         }
       }
@@ -112,16 +124,24 @@
       const qt=KTokens(query);
       let best=null,score=0;
       for(const e of this.encyclopedia){
-        const names=[e.title,...(e.aliases||[])];
+        const names=[e.title,...(e.aliases||[])].filter(Boolean);
         let s=0;
         for(const name of names){
           const n=KNorm(name);
-          if(q===n)s=Math.max(s,1);
-          else if(q.includes(n))s=Math.max(s,.88+Math.min(.08,n.length/100));
+          if(!n)continue;
+          if(q===n){
+            s=Math.max(s,1);
+            continue;
+          }
+          if(KPhraseIn(q,n)){
+            const shortAlias=n.length<KMinAliasLengthForSubstringMatch||KShortAliases.has(n);
+            s=Math.max(s,shortAlias?.95:.88+Math.min(.08,n.length/100));
+          }
         }
-        const hay=KTokens(`${e.title} ${(e.aliases||[]).join(" ")} ${(e.tags||[]).join(" ")}`);
+        const hay=KTokens(`${e.title||""} ${(e.aliases||[]).join(" ")} ${(e.tags||[]).join(" ")}`);
         if(qt.length){
-          const hit=qt.filter(t=>hay.includes(t)).length;
+          const bag=new Set(hay);
+          const hit=qt.filter(t=>bag.has(t)).length;
           s=Math.max(s,hit/qt.length*.78);
         }
         if(s>score){score=s;best=e;}
@@ -129,20 +149,25 @@
       return best?{entry:best,score}:null;
     }
 
+    isSelfRelativeQuery(text){return KSelfRelative(text);}
+
     isDefinitionQuery(text){
       const n=KNorm(text);
-      return /^(que es|que son|que significa|define|explica|dime sobre|hablame de|para que sirve|quien es|quien fue)\b/.test(n);
+      if(this.isSelfRelativeQuery(text))return false;
+      return /^(que es|que son|que significa|que sabes de|define|explica|dime sobre|hablame de|para que sirve|quien es|quien fue)\b/.test(n);
     }
 
     isFactualQuery(text){
       const n=KNorm(text);
-      return /^(que es|que son|que significa|quien es|quien fue|donde esta|donde queda|cuando fue|cuando ocurrio|cuantos|cuantas|define|explica|dime sobre|hablame de|para que sirve)\b/.test(n);
+      if(this.isSelfRelativeQuery(text))return false;
+      return /^(que es|que son|que significa|que sabes de|quien es|quien fue|donde esta|donde queda|cuando fue|cuando ocurrio|cuantos|cuantas|define|explica|dime sobre|hablame de|para que sirve)\b/.test(n);
     }
 
     topicFromQuestion(text){
       return (text||"")
         .replace(/^[¿?\s]*/u,"")
         .replace(/^(qué|que)\s+(es|son|significa)\s+/i,"")
+        .replace(/^(qué|que)\s+sabes\s+de\s+/i,"")
         .replace(/^(quién|quien)\s+(es|fue)\s+/i,"")
         .replace(/^(dónde|donde)\s+(está|esta|queda)\s+/i,"")
         .replace(/^(cuándo|cuando)\s+(fue|ocurrió|ocurrio)\s+/i,"")
@@ -154,6 +179,8 @@
     }
 
     localAnswer(text){
+      if(!this.isFactualQuery(text)&&!this.isDefinitionQuery(text))return null;
+
       const n=KNorm(text);
       const wantsMeaning=/^(que significa|define)\b/.test(n);
       if(wantsMeaning){
@@ -260,7 +287,7 @@
     if(personal)return oldHear.call(this,text);
 
     const localHit=store.localAnswer(q);
-    if(localHit&&(store.isDefinitionQuery(q)||q.includes("?")))return applyKnowledge(this,q,localHit);
+    if(localHit)return applyKnowledge(this,q,localHit);
 
     if(store.isFactualQuery(q)){
       return store.wikipediaAnswer(q).then(hit=>{
