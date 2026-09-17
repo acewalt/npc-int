@@ -270,7 +270,7 @@
       ask_memory:"ask_memory",ask_reason:"ask_why"
     };
     const companionSet=new Set(["greeting","farewell","thanks","apology","ask_companion_preference","ask_personality","ask_relationship","request_company","ask_shared_activity","ask_user_color_preference"]);
-    const qualitySet=new Set(["repair_wrong_answer","repair_repeat_question","repair_topic_drift","ask_first_user_message","ask_last_user_question","ask_pet_name","ask_pet_death_time","ask_mission_idea","ask_changed_mind","creator_purpose_statement"]);
+    const qualitySet=new Set(["repair_wrong_answer","repair_repeat_question","repair_topic_drift","ask_first_user_message","ask_last_user_question","ask_pet_name","ask_pet_death_time","ask_mission_idea","ask_changed_mind","creator_purpose_statement","ask_current_thought","ask_decision_process"]);
     const arbiterSet=new Set(["ask_self_state","ask_self_summary","ask_capabilities","ask_knowledge_summary","ask_desired_action","ask_creation_preference","ask_creation_method","ask_destination","destination_proposal","ask_context_reference","ask_opinion_about"]);
     const understandingSet=new Set(["ask_capabilities","ask_understanding","ask_concept_understanding","ask_self_concept","ask_internet_access","ask_reason","ask_current_thought"]);
     const refinementMap={personal_event:"express_grief"};
