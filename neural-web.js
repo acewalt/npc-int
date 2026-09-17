@@ -83,7 +83,7 @@
   function turnMode(text){
     const n=turnNorm(text);
     const explicitReference=/\b(eso|esto|anterior|antes|ultimo|ultima|dijiste|dije|pregunte|preguntado|hablando de eso|lo que te dije|lo que dije|mira lo que te dije)\b/.test(n);
-    const memoryQuery=/\b(que recuerdas|que sabes de mi|que me gusta|cual es mi|mi preferencia|te conte|te dije|recuerdas mi|como se llama mi)\b/.test(n);
+    const memoryQuery=/\b(que recuerdas|que sabes de mi|que me gusta|cual es mi|mi preferencia|te conte|te dije|recuerdas mi|como se llama mi|como se llamaba mi|cuando se murio mi|cuando murio mi|lo primero que te dije)\b/.test(n);
     const repair=/\b(no te pregunte|no pregunte|eso te pregunte|eso te habia preguntado|ya no te estoy hablando|no te estoy hablando|mira lo que te dije|esa no era mi pregunta)\b/.test(n);
     return {needsHistory:explicitReference||memoryQuery||repair,memoryQuery,repair};
   }
@@ -166,6 +166,11 @@
     const affect=brain.companionState?.lastUserAffect?.kind||"";
     return intent==="ask_changed_mind"||
       intent==="ask_last_user_question"||
+      intent==="ask_first_user_message"||
+      intent==="ask_pet_name"||
+      intent==="ask_pet_death_time"||
+      intent==="ask_mission_idea"||
+      intent==="creator_purpose_statement"||
       intent.startsWith("repair_")||
       affect==="grief";
   }
@@ -600,5 +605,5 @@
   updateQwenButton();
 
   window.NpcIntNeuralWeb={state,health,loadQwen,activateQwen,updateQwenButton,generate,browserMessages,contextFor,compactCompanion,prepareSymbolicDraft,recordNeuralTurn,turnMode,neuralQuality};
-  print("system","","capa neuronal web v0.9 cargada · contexto filtrado por turno + quality gate + WebGPU/CPU fallback");
+  print("system","","capa neuronal web v1.0 cargada · memoria autobiográfica protegida + contexto filtrado + WebGPU/CPU fallback");
 })();

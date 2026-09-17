@@ -6,7 +6,8 @@
 
   function detectAffect(text){
     const n=norm(text);
-    if(/\b(?:mi|el|la)\s+(?:perro|perra|gato|gata|mascota)\b[\s\S]*\b(?:murio|murió|fallecio|falleció|se murio|se murió)\b/.test(n) || /\b(?:murio|murió|fallecio|falleció)\b[\s\S]*\b(?:mi )?(?:perro|perra|gato|gata|mascota)\b/.test(n))return {kind:"grief",confidence:.99};
+    const question=/[?¿]/.test(String(text||""))||/^(?:como|donde|que|cual|quien|por que|porque)\b/.test(n)||/^cuando (?!tenia\b|era\b|estaba\b)/.test(n);
+    if(!question&&(/\b(?:mi|el|la)\s+(?:perro|perra|gato|gata|mascota)\b[\s\S]*\b(?:murio|fallecio|se murio)\b/.test(n) || /\b(?:murio|fallecio)\b[\s\S]*\b(?:mi )?(?:perro|perra|gato|gata|mascota)\b/.test(n)))return {kind:"grief",confidence:.99};
     if(/\b(?:me siento|estoy|ando)\s+(?:muy )?(?:solo|sola|aislado|aislada)\b/.test(n))return {kind:"loneliness",confidence:.98};
     if(/\b(?:me siento|estoy|ando)\s+(?:muy )?(?:triste|decaido|decaida|mal)\b/.test(n))return {kind:"low_mood",confidence:.90};
     if(/\b(?:estoy|ando)\s+(?:muy )?(?:aburrido|aburrida)\b/.test(n))return {kind:"boredom",confidence:.96};
@@ -42,8 +43,18 @@
     return "Me gustaría investigar o construir algo contigo: una situación con pistas, un problema que podamos descomponer o una idea que podamos poner a prueba. Si tengo que escoger una, elegiría una situación donde lo que decidamos tenga consecuencias y podamos aprender de ellas.";
   }
 
-  function griefAnswer(){
-    return "Lo siento. Si ocurrió ayer, es algo muy reciente. No voy a mezclarlo con otros temas ni minimizar lo que pasó. Si quieres hablar de tu mascota o contarme qué ocurrió, te escucho; y si prefieres cambiar de tema, también está bien.";
+  function griefAnswer(b){
+    const pet=window.NpcIntSocialMemory?.latestPet?.(b);
+    const data=pet?.data||{};
+    const name=data.name||null;
+    const when=data.when||null;
+    if(when?.type==="user_age"&&Number.isFinite(Number(when.age))){
+      return `Lo siento. Me dijiste que ${name?name+" ":"tu mascota "}murió cuando tenías ${Number(when.age)} años. Lo voy a recordar con ese contexto temporal.`;
+    }
+    if(when?.type==="relative"&&when.value==="ayer"){
+      return `Lo siento. Me dijiste que ${name?name+" ":"tu mascota "}murió ayer. Es algo reciente; si quieres hablar de lo que pasó, te escucho, y si prefieres cambiar de tema, también está bien.`;
+    }
+    return `Lo siento. Me quedo con que ${name?name:"tu mascota"} murió. Si quieres contarme más sobre ${name?"él o ella":"tu mascota"}, te escucho; si prefieres cambiar de tema, también está bien.`;
   }
 
   function lonelinessAnswer(b,frame){
@@ -71,7 +82,7 @@
 
   function answer(b,frame){
     switch(frame.intent){
-      case "express_grief":return griefAnswer();
+      case "express_grief":return griefAnswer(b);
       case "ask_companion_activity":return desiredActivityAnswer(b);
       case "express_loneliness":return lonelinessAnswer(b,frame);
       case "express_low_mood":return lowMoodAnswer(b,frame);
@@ -82,8 +93,12 @@
   }
 
   function registerTransientState(b,frame){
-    if(!frame.affect)return;
     if(!b.companionState)b.companionState={};
+    if(!frame.affect){
+      b.companionState.lastUserAffect=null;
+      if(b.companionState.lastPlan)b.companionState.lastPlan.userAffect=null;
+      return;
+    }
     b.companionState.lastUserAffect={...frame.affect,wallMs:Date.now(),source:"explicit-language",persistent:false};
     if(b.companionState.lastPlan)b.companionState.lastPlan.userAffect=frame.affect.kind;
   }
@@ -106,5 +121,5 @@
   };
 
   window.NpcIntCompanionRefinement={classify,detectAffect,answer,desiredActivityAnswer,meaningfulThread,griefAnswer};
-  print("system","","companion refinement v1.1 cargado · duelo + estados transitorios + propuestas + actividad propia");
+  print("system","","companion refinement v1.2 cargado · duelo con contexto temporal + estados transitorios + propuestas");
 })();

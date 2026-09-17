@@ -31,11 +31,11 @@
     const key=keyOf(kind,clean),slot=slotOf(kind,clean),existing=s.items.find(x=>x.key===key);
     if(existing){
       deactivateSlot(s,slot,key);
-      existing.active=true;existing.slot=slot||existing.slot||null;
+      existing.active=true;existing.slot=slot||existing.slot||null;if(meta.data)existing.data={...(existing.data||{}),...meta.data};
       existing.mentions++;existing.lastMentionedTime=b.time||0;existing.lastMentionedWallMs=Date.now();existing.importance=Math.min(1,Math.max(existing.importance,meta.importance??.55)+.025);existing.confidence=Math.max(existing.confidence,meta.confidence??.82);return existing;
     }
     deactivateSlot(s,slot);
-    const item={id:s.seq++,key,kind,value:clean,slot,active:true,subject:meta.subject||"user",source:meta.source||"explicit-user",confidence:meta.confidence??.9,importance:meta.importance??.58,time:b.time||0,wallMs:Date.now(),lastMentionedTime:b.time||0,lastMentionedWallMs:Date.now(),mentions:1,tone:meta.tone||"neutral",tags:meta.tags||[]};
+    const item={id:s.seq++,key,kind,value:clean,slot,active:true,subject:meta.subject||"user",source:meta.source||"explicit-user",confidence:meta.confidence??.9,importance:meta.importance??.58,time:b.time||0,wallMs:Date.now(),lastMentionedTime:b.time||0,lastMentionedWallMs:Date.now(),mentions:1,tone:meta.tone||"neutral",tags:meta.tags||[],data:meta.data||null};
     s.items.push(item);
     if(s.items.length>120)s.items.sort((a,c)=>(c.importance+c.mentions*.03)-(a.importance+a.mentions*.03)).splice(120);
     return item;
@@ -43,9 +43,27 @@
 
   function extract(text){
     const raw=String(text||"").trim(),n=norm(raw),out=[];
-    const push=(kind,value,importance=.6,tags=[])=>{if(value&&value.trim().length>1&&!sensitive.test(value))out.push({kind,value:value.trim(),importance,tags});};
+    const push=(kind,value,importance=.6,tags=[],data=null)=>{if(value&&String(value).trim().length>1&&!sensitive.test(String(value)))out.push({kind,value:String(value).trim(),importance,tags,data});};
     let m;
     if((m=raw.match(/(?:me llamo|mi nombre es)\s+([A-Za-zÁÉÍÓÚÜÑáéíóúüñ][\wÁÉÍÓÚÜÑáéíóúüñ-]{1,40})/i)))push("name",m[1],.95,["identity"]);
+    const asksQuestion=/[?¿]/.test(raw)||/^(?:como|donde|que|cual|quien|por que|porque)\b/.test(n)||/^cuando (?!tenia\b|era\b|estaba\b)/.test(n);
+    if(!asksQuestion&&/\b(?:murio|fallecio|se murio)\b/.test(n)&&/\b(?:perro|perra|gato|gata|mascota)\b/.test(n)){
+      const species=(n.match(/\b(perro|perra|gato|gata|mascota)\b/)||[])[1]||"mascota";
+      const nameMatch=raw.match(/\b(?:llamad[oa]|se llamaba|de nombre)\s+([A-Za-zÁÉÍÓÚÜÑáéíóúüñ][\wÁÉÍÓÚÜÑáéíóúüñ-]{1,40})/i);
+      const ageMatch=n.match(/\bcuando tenia\s+(\d{1,2})\s+anos?\b/)||n.match(/\ba los\s+(\d{1,2})\s+anos?\b/);
+      const name=nameMatch?nameMatch[1]:null;
+      const age=ageMatch?Number(ageMatch[1]):null;
+      const relative=/\bayer\b/.test(n)?"ayer":/\bhoy\b/.test(n)?"hoy":null;
+      const label=name||species;
+      push("pet",label,.93,["pet","deceased",species],{
+        name,
+        species,
+        status:"deceased",
+        when:age?{type:"user_age",age}:relative?{type:"relative",value:relative}:null,
+        original:raw
+      });
+    }
+
     if((m=raw.match(/\bno me gusta(?:n)?\s+(.{2,120})/i)))push("dislike",m[1],.66,["preference"]);
     else if((m=raw.match(/\bme gusta(?:n)?\s+(.{2,120})/i)))push("like",m[1],.66,["preference"]);
     if((m=raw.match(/\bprefiero\s+(.{2,120})/i)))push("preference",m[1],.70,["preference"]);
@@ -58,7 +76,7 @@
 
   function noteTurn(b,text,meta={}){
     const s=ensure(b),items=extract(text),added=[];
-    for(const x of items){const item=add(b,x.kind,x.value,{importance:x.importance,tags:x.tags,tone:meta.tone||"neutral"});if(item)added.push(item);}
+    for(const x of items){const item=add(b,x.kind,x.value,{importance:x.importance,tags:x.tags,data:x.data||null,tone:meta.tone||"neutral"});if(item)added.push(item);}
     s.lastExtracted=added.map(x=>x.id);
     return added;
   }
@@ -79,7 +97,13 @@
 
   function profile(b){
     const s=ensure(b),best=kind=>s.items.filter(x=>x.kind===kind&&x.active!==false).sort((a,c)=>(c.lastMentionedWallMs||0)-(a.lastMentionedWallMs||0)||(c.importance+c.mentions*.03)-(a.importance+a.mentions*.03)).slice(0,5);
-    return {name:best("name")[0]?.value||b.relation?.name||"Jugador",likes:best("like"),dislikes:best("dislike"),preferences:best("preference"),projects:best("project"),goals:best("goal"),updates:best("shared-update")};
+    return {name:best("name")[0]?.value||b.relation?.name||"Jugador",likes:best("like"),dislikes:best("dislike"),preferences:best("preference"),projects:best("project"),goals:best("goal"),updates:best("shared-update"),pets:best("pet")};
+  }
+
+  function latestPet(b){
+    return ensure(b).items
+      .filter(x=>x.kind==="pet"&&x.active!==false)
+      .sort((a,c)=>(c.lastMentionedWallMs||c.wallMs||0)-(a.lastMentionedWallMs||a.wallMs||0))[0]||null;
   }
 
   function snapshot(b){return {version:1,seq:ensure(b).seq,items:ensure(b).items.map(x=>({...x}))};}
@@ -98,6 +122,6 @@
   function clear(b){const s=ensure(b);s.items=[];s.seq=1;s.lastExtracted=[];}
   function format(b){const p=profile(b),s=ensure(b);const rows=s.items.slice(-12).map(x=>`#${x.id} [${x.kind}] ${x.value} · imp=${x.importance.toFixed(2)} · menciones=${x.mentions}`);return [`persona=${p.name}`,`recuerdos sociales=${s.items.length}`,...rows].join("\n");}
 
-  window.NpcIntSocialMemory={ensure,add,extract,noteTurn,recall,profile,snapshot,restore,clear,format,slotOf};
-  print("system","","memoria social v1.1 cargada · preferencias por categoría + recencia + continuidad compartida");
+  window.NpcIntSocialMemory={ensure,add,extract,noteTurn,recall,profile,snapshot,restore,clear,format,slotOf,latestPet};
+  print("system","","memoria social v1.2 cargada · mascotas estructuradas + preferencias por categoría + recencia");
 })();
