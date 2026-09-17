@@ -6,7 +6,7 @@
 
   function detectAffect(text){
     const n=norm(text);
-    const question=/[?¿]/.test(String(text||""))||/^(?:como|cuando|donde|que|cual|quien|por que|porque)\b/.test(n);
+    const question=/[?¿]/.test(String(text||""))||/^(?:como|donde|que|cual|quien|por que|porque)\b/.test(n)||/^cuando (?!tenia\b|era\b|estaba\b)/.test(n);
     if(!question&&(/\b(?:mi|el|la)\s+(?:perro|perra|gato|gata|mascota)\b[\s\S]*\b(?:murio|fallecio|se murio)\b/.test(n) || /\b(?:murio|fallecio)\b[\s\S]*\b(?:mi )?(?:perro|perra|gato|gata|mascota)\b/.test(n)))return {kind:"grief",confidence:.99};
     if(/\b(?:me siento|estoy|ando)\s+(?:muy )?(?:solo|sola|aislado|aislada)\b/.test(n))return {kind:"loneliness",confidence:.98};
     if(/\b(?:me siento|estoy|ando)\s+(?:muy )?(?:triste|decaido|decaida|mal)\b/.test(n))return {kind:"low_mood",confidence:.90};
