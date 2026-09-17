@@ -13,8 +13,13 @@
     return b.companionState;
   }
 
-  function classify(text){
+  function classify(text,b=null){
     const n=norm(text);let intent=null;
+    const central=b?window.NpcIntIntentRouter?.currentFor?.(b,text):null;
+    if(central&&window.NpcIntIntentRouter?.authoritative?.(central)){
+      const routed=central.routes?.companion||null;
+      return {raw:text,canonical:n,intent:routed,centralIntent:central.intent,source:"intent-router"};
+    }
     if(/^(hola|buenas|hey|ey|que onda|que tal)(?: .*)?$/.test(n))intent="social_greeting";
     else if(/^(chao|chau|adios|nos vemos|hasta luego|me voy|hablamos luego)$/.test(n))intent="farewell";
     else if(/^(gracias|muchas gracias|te agradezco|gracias parce)(?: .*)?$/.test(n))intent="thanks";
@@ -156,7 +161,7 @@
 
   const oldHear=NpcBrain.prototype.hear;
   NpcBrain.prototype.hear=function(text){
-    ensure(this);text=String(text||"").trim();const frame=classify(text);const now=Date.now();
+    ensure(this);text=String(text||"").trim();const frame=classify(text,this);const now=Date.now();
     window.NpcIntSocialTiming?.noteUser?.(this,now);
     window.NpcIntRelationship?.noteUser?.(this,text,{now});
     const added=window.NpcIntSocialMemory?.noteTurn?.(this,text,{tone:this.pragmatics?.lastTone||"neutral"})||[];
@@ -228,5 +233,5 @@
 
   ensure(brain);
   window.NpcIntCompanion={ensure,classify,socialReply,status,greetingAnswer,sharedActivity,memoryAnswer,colorPreferenceAnswer};
-  print("system","","companion engine v1.2 cargado · preferencias recientes + iniciativa bloqueada durante Qwen + continuidad");
+  print("system","","companion engine v1.3 cargado · consume intención central + preferencias recientes + continuidad");
 })();
