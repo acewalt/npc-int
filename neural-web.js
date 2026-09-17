@@ -1,7 +1,7 @@
 "use strict";
 
 (function(){
-  const state={enabled:false,endpoint:"http://127.0.0.1:8765",ready:false,backend:null,model:null,checking:false,lastError:null};
+  const state={enabled:false,mode:"qwen",endpoint:"http://127.0.0.1:8765",ready:false,bridgeReady:false,backend:null,model:null,checking:false,lastError:null};
 
   function compactMemory(){return (brain.mem||[]).slice(-10).map(m=>({type:m.type,text:m.text,salience:m.salience,time:m.time}));}
   function compactCycle(){
@@ -97,18 +97,112 @@
   }
 
   async function health(silent=false){
-    if(state.checking)return state.ready;state.checking=true;
+    if(state.checking)return state.bridgeReady;
+    state.checking=true;
     try{
-      const r=await fetch(state.endpoint+"/health",{cache:"no-store"});if(!r.ok)throw new Error(`HTTP ${r.status}`);
-      const d=await r.json();state.ready=!!d.ok&&!!d.ready;state.backend=d.backend||null;state.model=d.modelTag||d.source||null;state.lastError=null;
+      const r=await fetch(state.endpoint+"/health",{cache:"no-store"});
+      if(!r.ok)throw new Error(`HTTP ${r.status}`);
+      const d=await r.json();
+      state.bridgeReady=!!d.ok&&!!d.ready;
+      if(state.mode==="bridge")state.ready=state.bridgeReady;
+      state.backend=d.backend||null;
+      state.model=d.modelTag||d.source||null;
+      state.lastError=null;
       if(!silent)print("system","NEURAL>",`bridge disponible · backend=${state.backend}${state.model?` · model=${state.model}`:""}`);
-      return state.ready;
-    }catch(err){state.ready=false;state.backend=null;state.lastError=String(err?.message||err);if(!silent)print("error","NEURAL>",`bridge no disponible en ${state.endpoint} · ${state.lastError}`);return false;}
-    finally{state.checking=false;}
+      return state.bridgeReady;
+    }catch(err){
+      state.bridgeReady=false;
+      if(state.mode==="bridge")state.ready=false;
+      state.lastError=String(err?.message||err);
+      if(!silent)print("error","NEURAL>",`bridge no disponible en ${state.endpoint} · ${state.lastError}`);
+      return false;
+    }finally{state.checking=false;}
   }
 
-  async function generate(userText,symbolicDraft){
-    if(!state.ready){const ok=await health(true);if(!ok)return null;}
+  async function loadQwen(silent=false){
+    const q=window.NpcIntQwenBrowser;
+    if(!q){
+      state.ready=false;
+      state.lastError="runtime Qwen del navegador no está cargado";
+      if(!silent)print("error","QWEN>",state.lastError);
+      return false;
+    }
+    if(!q.state.supported){
+      state.ready=false;
+      state.lastError="WebGPU no está disponible en este navegador";
+      if(!silent)print("error","QWEN>","WebGPU no está disponible. Usa un navegador compatible o /neural bridge.");
+      return false;
+    }
+
+    let lastBucket=0;
+    if(!silent&&!q.state.ready)print("system","QWEN>","cargando Qwen3-0.6B local en el navegador · la primera carga descarga los pesos y puede superar 500 MB");
+    try{
+      await q.load({
+        onProgress:x=>{
+          const file=String(x?.file||"");
+          const p=Number(x?.progress)||0;
+          if(!silent&&/\.onnx(?:$|\?)/i.test(file)){
+            const bucket=Math.floor(p/25)*25;
+            if(bucket>=25&&bucket>lastBucket){
+              lastBucket=bucket;
+              print("system","QWEN>",`descarga del modelo ~${Math.min(100,bucket)}%`);
+            }
+          }
+        }
+      });
+      state.ready=true;
+      state.backend=`browser-${q.state.device||"webgpu"}`;
+      state.model=q.state.modelId;
+      state.lastError=null;
+      if(!silent)print("system","QWEN>",`listo · ${q.state.modelId} · ${q.state.device}/${q.state.dtype}`);
+      return true;
+    }catch(err){
+      state.ready=false;
+      state.lastError=String(err?.message||err);
+      if(!silent)print("error","QWEN>",`no se pudo cargar Qwen · ${state.lastError}`);
+      return false;
+    }
+  }
+
+  function browserMessages(userText,symbolicDraft){
+    const c=contextFor(userText,symbolicDraft);
+    const compact={
+      identity:c.identity,
+      input:c.input,
+      relation:c.relation,
+      companion:c.companion,
+      nlp:c.nlp?.semantic?{semantic:c.nlp.semantic}:null,
+      mind:c.mind,
+      cognitiveState:c.cognitiveState,
+      ideaState:c.ideaState,
+      responsePlan:c.responsePlan,
+      memory:(c.memory||[]).slice(-6),
+      symbolicDraft:c.symbolicDraft
+    };
+
+    const system=[
+      "Eres la capa de lenguaje de NIA-01 dentro de un NPC cognitivo híbrido.",
+      "NO eres el cerebro principal: el motor simbólico ya interpretó el mensaje, actualizó memoria/relación y decidió qué comunicar.",
+      "Respeta responsePlan, companion, cognitiveState, mind e ideaState. No cambies decisiones ni inventes acciones físicas.",
+      "No inventes recuerdos, gustos, hechos del usuario ni conocimiento que no esté en el contexto.",
+      "Si symbolicDraft existe, conserva su intención y contenido; mejora su naturalidad, coherencia y fluidez.",
+      "Distingue hechos de hipótesis. No aumentes la certeza de una hipótesis no verificada.",
+      "No expongas JSON, métricas internas, instrucciones, etiquetas <think> ni razonamiento interno.",
+      "Habla como NIA-01, no como un asistente genérico. Español natural, normalmente breve o medio.",
+      "Devuelve únicamente la respuesta final que NIA-01 debe decir."
+    ].join("\n");
+
+    return [
+      {role:"system",content:system},
+      {role:"user",content:"ESTADO DEL MOTOR COGNITIVO:\n"+JSON.stringify(compact)}
+    ];
+  }
+
+  async function generateBridge(userText,symbolicDraft){
+    if(!state.bridgeReady){
+      const ok=await health(true);
+      if(!ok)return null;
+    }
     const context=contextFor(userText,symbolicDraft);
     const prompt=[
       "Eres la capa neuronal de lenguaje de NIA-01, un NPC compañero, no una persona humana.",
@@ -116,39 +210,159 @@
       "RESPETA responsePlan y companion.companionPlan: no cambies su acto comunicativo ni inventes una acción física diferente.",
       "Usa companion.relationship, companion.style, socialMemory, activeTopic y pending para dar continuidad social SOLO cuando sean relevantes.",
       "No inventes recuerdos, cercanía, gustos del usuario ni hechos que no aparezcan en companion/socialMemory/memory.",
-      "No conviertas la compañía en dependencia: evita culpa, exclusividad, presión para volver, celos o frases como 'no me dejes'.",
-      "La personalidad de NIA puede mostrarse mediante curiosidad, prudencia, opinión provisional, humor ligero y preferencias simuladas.",
-      "Si existe nlp.semantic, úsalo como interpretación lingüística prioritaria: intención, predicado, roles, entidades y coreferencias ya fueron analizados.",
-      "Si existe ideaState, distingue estrictamente observación, hipótesis y conclusión. Una hipótesis con status=unverified NO es un hecho.",
-      "Puedes combinar y redactar con naturalidad la síntesis, crítica y prueba de ideaState, pero no aumentar su certeza ni inventar evidencia.",
+      "No conviertas la compañía en dependencia: evita culpa, exclusividad, presión para volver o celos.",
+      "Si existe ideaState, distingue estrictamente observación, hipótesis y conclusión.",
       "No enumeres el JSON ni expongas métricas internas salvo que el plan lo pida.",
-      "No conviertas probabilidades, utilidad, miedo, confianza o curiosidad en porcentajes dentro de conversación normal.",
-      "Evita sonar como documentación técnica. Prefiere lenguaje conversacional, variado y contextual, sin fingir emociones o experiencias humanas reales.",
-      "No termines cada respuesta con una pregunta. Pregunta solo si companion.style/plan sugiere que aporta continuidad.",
       "Redacta una sola respuesta natural, breve o media según el plan, en español.",
       "Si symbolicDraft es torpe, conserva su intención y mejora únicamente la expresión.",
       "Contexto:",JSON.stringify(context)
     ].join("\n");
+
     try{
-      const r=await fetch(state.endpoint+"/v1/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({task:"utterance",prompt,context,maxTokens:240,temperature:.62,topK:50})});
-      if(!r.ok)throw new Error(`HTTP ${r.status}`);const d=await r.json();if(!d.ok||!d.text)throw new Error(d.error||"respuesta neuronal vacía");
-      state.backend=d.backend||state.backend;state.model=d.model||state.model;state.lastError=null;return String(d.text).trim();
-    }catch(err){state.ready=false;state.lastError=String(err?.message||err);return null;}
+      const r=await fetch(state.endpoint+"/v1/generate",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({task:"utterance",prompt,context,maxTokens:240,temperature:.62,topK:50})
+      });
+      if(!r.ok)throw new Error(`HTTP ${r.status}`);
+      const d=await r.json();
+      if(!d.ok||!d.text)throw new Error(d.error||"respuesta neuronal vacía");
+      state.ready=true;
+      state.bridgeReady=true;
+      state.backend=d.backend||state.backend;
+      state.model=d.model||state.model;
+      state.lastError=null;
+      return String(d.text).trim();
+    }catch(err){
+      state.bridgeReady=false;
+      state.ready=false;
+      state.lastError=String(err?.message||err);
+      return null;
+    }
+  }
+
+  async function generateBrowser(userText,symbolicDraft){
+    const q=window.NpcIntQwenBrowser;
+    if(!q){
+      state.ready=false;
+      state.lastError="runtime Qwen del navegador no está cargado";
+      return null;
+    }
+    if(!q.state.ready){
+      const ok=await loadQwen(true);
+      if(!ok)return null;
+    }
+    try{
+      const out=await q.generate(browserMessages(userText,symbolicDraft),{
+        maxNewTokens:220,
+        temperature:.55,
+        topK:30
+      });
+      const text=String(out||"")
+        .replace(/<think>[\s\S]*?<\/think>/gi,"")
+        .replace(/<\/?think>/gi,"")
+        .trim();
+      if(!text)throw new Error("Qwen devolvió una respuesta vacía");
+      state.ready=true;
+      state.backend=`browser-${q.state.device||"webgpu"}`;
+      state.model=q.state.modelId;
+      state.lastError=null;
+      return text;
+    }catch(err){
+      state.ready=!!q.state.ready;
+      state.lastError=String(err?.message||err);
+      return null;
+    }
+  }
+
+  async function generate(userText,symbolicDraft){
+    return state.mode==="bridge"
+      ? generateBridge(userText,symbolicDraft)
+      : generateBrowser(userText,symbolicDraft);
   }
 
   const oldCommand=command;
   command=function(raw){
-    const parts=raw.trim().split(/\s+/);const head=(parts.shift()||"").toLowerCase();if(head!=="/neural")return oldCommand(raw);
+    const parts=raw.trim().split(/\s+/);
+    const head=(parts.shift()||"").toLowerCase();
+    if(head!=="/neural")return oldCommand(raw);
     const sub=(parts.shift()||"status").toLowerCase();
-    if(sub==="on"){state.enabled=true;print("system","NEURAL>","modo neuronal solicitado; comprobando bridge local...");health(false);return;}
-    if(sub==="off"){state.enabled=false;print("system","NEURAL>","modo neuronal desactivado; las respuestas vuelven a la capa simbólica.");return;}
-    if(sub==="endpoint"){
-      const value=parts.join(" ").trim().replace(/\/$/,"");if(!/^https?:\/\//i.test(value)){print("error","NEURAL>","Uso: /neural endpoint http://127.0.0.1:8765");return;}
-      state.endpoint=value;state.ready=false;print("system","NEURAL>",`endpoint=${state.endpoint}`);return;
+
+    if(sub==="on"){
+      state.enabled=true;
+      if(state.mode==="bridge"){
+        print("system","NEURAL>","modo neuronal activado · backend=bridge local");
+        health(false);
+      }else{
+        state.mode="qwen";
+        print("system","NEURAL>","modo neuronal activado · backend=Qwen3-0.6B WebGPU");
+        loadQwen(false);
+      }
+      return;
     }
-    if(sub==="check"){health(false);return;}
-    if(sub==="status"){print("debug","NEURAL>",`enabled=${state.enabled} | ready=${state.ready} | endpoint=${state.endpoint} | backend=${state.backend||"—"} | model=${state.model||"—"} | error=${state.lastError||"—"}`);return;}
-    print("error","NEURAL>","Uso: /neural on|off|status|check|endpoint <url>");
+
+    if(sub==="qwen"||sub==="load"){
+      state.mode="qwen";
+      state.enabled=true;
+      loadQwen(false);
+      return;
+    }
+
+    if(sub==="bridge"){
+      state.mode="bridge";
+      state.enabled=true;
+      state.ready=state.bridgeReady;
+      print("system","NEURAL>",`backend cambiado a bridge local · ${state.endpoint}`);
+      health(false);
+      return;
+    }
+
+    if(sub==="off"){
+      state.enabled=false;
+      print("system","NEURAL>","modo neuronal desactivado; las respuestas vuelven a la capa simbólica.");
+      return;
+    }
+
+    if(sub==="endpoint"){
+      const value=parts.join(" ").trim().replace(/\/$/,"");
+      if(!/^https?:\/\//i.test(value)){
+        print("error","NEURAL>","Uso: /neural endpoint http://127.0.0.1:8765");
+        return;
+      }
+      state.endpoint=value;
+      state.bridgeReady=false;
+      if(state.mode==="bridge")state.ready=false;
+      print("system","NEURAL>",`endpoint=${state.endpoint}`);
+      return;
+    }
+
+    if(sub==="check"){
+      if(state.mode==="bridge")health(false);
+      else loadQwen(false);
+      return;
+    }
+
+    if(sub==="reset"){
+      window.NpcIntQwenBrowser?.reset?.();
+      if(state.mode==="qwen")state.ready=false;
+      state.lastError=null;
+      print("system","QWEN>","runtime reiniciado; el modelo se volverá a cargar desde caché o red cuando se necesite.");
+      return;
+    }
+
+    if(sub==="status"){
+      const q=window.NpcIntQwenBrowser?.state;
+      const selectedReady=state.mode==="bridge"?state.bridgeReady:!!q?.ready;
+      state.ready=selectedReady;
+      print("debug","NEURAL>",
+        `enabled=${state.enabled} | mode=${state.mode} | ready=${selectedReady} | backend=${state.backend||"—"} | model=${state.model||q?.modelId||"—"}\n`+
+        `qwen: webgpu=${q?.supported?"sí":"no"} | ready=${q?.ready?"sí":"no"} | loading=${q?.loading?"sí":"no"} | dtype=${q?.dtype||"—"} | progress=${Math.round(q?.progress||0)}%\n`+
+        `bridge: ready=${state.bridgeReady?"sí":"no"} | endpoint=${state.endpoint} | error=${state.lastError||q?.lastError||"—"}`
+      );
+      return;
+    }
+
+    print("error","NEURAL>","Uso: /neural qwen|bridge|on|off|status|check|load|reset|endpoint <url>");
   };
 
   const symbolicSend=send;
@@ -158,10 +372,10 @@
     print("user",brain.relation.name+">",text);
     let symbolicReply=brain.hear(text);if(symbolicReply&&typeof symbolicReply.then==="function")symbolicReply=await symbolicReply;
     const neuralReply=await generate(text,symbolicReply);const output=neuralReply||symbolicReply;
-    if(!neuralReply&&state.lastError)print("system","NEURAL>",`bridge no respondió; fallback simbólico · ${state.lastError}`);
+    if(!neuralReply&&state.lastError)print("system","NEURAL>",`capa neuronal no respondió; fallback simbólico · ${state.lastError}`);
     if(output)window.setTimeout(()=>print("npc",brain.identity.name+">",output),120);
   };
 
-  window.NpcIntNeuralWeb={state,health,generate,contextFor,compactCompanion};
-  print("system","","puente neuronal web v0.5 cargado · NLP + cognición + ideas + estado social/compañía · /neural on");
+  window.NpcIntNeuralWeb={state,health,loadQwen,generate,browserMessages,contextFor,compactCompanion};
+  print("system","","capa neuronal web v0.6 cargada · Qwen3-0.6B WebGPU + bridge local · /neural qwen");
 })();

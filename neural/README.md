@@ -17,6 +17,41 @@ percepción -> memoria/estado/objetivos -> MentalCycleEngine -> decisión
 
 La acción sigue perteneciendo al motor simbólico. Nanochat recibe la decisión y la expresa de forma natural. Más adelante también puede usarse como analizador semántico/pragmático, pero su salida debe convertirse en hipótesis o datos estructurados antes de afectar acciones físicas.
 
+
+## Qwen3-0.6B directamente en GitHub Pages
+
+La terminal web también puede usar **Qwen3-0.6B** como realizador de lenguaje sin servidor local. El navegador descarga `onnx-community/Qwen3-0.6B-ONNX` desde Hugging Face y lo ejecuta con Transformers.js + WebGPU.
+
+El flujo web es:
+
+```text
+mensaje -> npc-int simbólico -> memoria / relación / cognición / responsePlan
+                                                |
+                                                v
+                                      borrador simbólico
+                                                |
+                                                v
+                                     Qwen3-0.6B WebGPU
+                                                |
+                                                v
+                                      respuesta natural
+```
+
+Qwen no decide las acciones del NPC. Recibe un contexto compacto con la decisión y el borrador ya producidos por `npc-int`, y se limita a expresarlos con mayor naturalidad.
+
+Comandos de la terminal:
+
+```text
+/neural qwen       activa Qwen3-0.6B y lo carga en WebGPU
+/neural status     muestra backend, modelo, progreso y estado
+/neural off        vuelve a respuestas puramente simbólicas
+/neural reset      descarga el worker de memoria; los archivos pueden seguir en caché
+/neural bridge     usa nuevamente el bridge HTTP local
+/neural endpoint http://127.0.0.1:8765
+```
+
+La primera carga descarga varios cientos de MB. Los pesos **no están incluidos en este repositorio**. Si WebGPU no está disponible o la carga falla, la conversación conserva el fallback simbólico.
+
 ## Revisión fijada
 
 `nanochat.lock.json` fija una revisión concreta de `karpathy/nanochat`. El checkout de Nanochat **no se sube** a este repo; `setup_nanochat.py` lo coloca en `neural/vendor/nanochat` y `.gitignore` lo excluye.
