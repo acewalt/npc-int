@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "stateRates": {
+    "hungerPerMinute": 0.0042,
+    "energyPerMinute": -0.0028,
+    "fearCarry": 0.82,
+    "fearThreatWeight": 0.72
+  },
+  "goalThresholds": {
+    "food": 0.22,
+    "restEnergyBelow": 0.78,
+    "understandCuriosityAbove": 0.35,
+    "boundariesTrustBelow": 0.35
+  },
+  "scoring": {
+    "base": 0.18,
+    "normalizer": 1.65,
+    "riskBaseWeight": 0.45,
+    "riskCautionWeight": 0.55,
+    "costBaseWeight": 0.22,
+    "costLowEnergyWeight": 0.80,
+    "informationWeight": 0.45,
+    "socialTrustWeight": 0.16,
+    "prematureAttackRisk": 0.35,
+    "dangerousWaitRisk": 0.45,
+    "investigateThreatRisk": 0.25
+  },
+  "actions": {
+    "respond": {"label":"hablar","cost":0.04,"risk":0.02,"info":0.10,"social":0.70,"align":{"social":0.90,"understand":0.25,"purpose":0.25,"boundaries":0.25}},
+    "ask": {"label":"preguntar","cost":0.05,"risk":0.02,"info":0.85,"social":0.60,"align":{"understand":0.95,"social":0.65,"purpose":0.35}},
+    "observe": {"label":"observar","cost":0.04,"risk":0.05,"info":0.60,"social":0.05,"align":{"understand":0.70,"safety":0.35,"purpose":0.35}},
+    "investigate": {"label":"investigar","cost":0.16,"risk":0.22,"info":0.95,"social":0.00,"align":{"understand":0.95,"purpose":0.70,"safety":0.10}},
+    "wait": {"label":"esperar","cost":0.01,"risk":0.12,"info":0.05,"social":-0.10,"align":{"rest":0.25,"safety":0.18}},
+    "rest": {"label":"descansar","cost":-0.30,"risk":0.10,"info":0.00,"social":-0.15,"align":{"rest":1.00,"purpose":-0.10}},
+    "seek_food": {"label":"buscar comida","cost":0.18,"risk":0.10,"info":0.20,"social":0.00,"align":{"food":1.00,"purpose":0.15}},
+    "eat": {"label":"comer","cost":0.02,"risk":0.02,"info":0.00,"social":0.00,"align":{"food":1.00}},
+    "move_away": {"label":"alejarme","cost":0.14,"risk":0.05,"info":0.05,"social":0.00,"align":{"safety":0.95}},
+    "defend": {"label":"defenderme","cost":0.30,"risk":0.50,"info":0.00,"social":-0.60,"align":{"safety":0.72}},
+    "attack": {"label":"atacar","cost":0.42,"risk":0.82,"info":0.00,"social":-1.00,"align":{"safety":0.38}},
+    "set_boundary": {"label":"marcar un límite","cost":0.05,"risk":0.05,"info":0.05,"social":0.15,"align":{"boundaries":1.00,"safety":0.28}},
+    "explore": {"label":"explorar","cost":0.18,"risk":0.15,"info":0.78,"social":0.00,"align":{"understand":0.70,"purpose":0.72}}
+  }
+}
