@@ -205,6 +205,7 @@
         onProgress:x=>{
           const file=String(x?.file||"");
           const p=Number(x?.progress)||0;
+          updateQwenButton(p);
           if(!silent&&/\.onnx(?:$|\?)/i.test(file)){
             const bucket=Math.floor(p/25)*25;
             if(bucket>=25&&bucket>lastBucket){
@@ -218,11 +219,13 @@
       state.backend=`browser-${q.state.device||"webgpu"}`;
       state.model=q.state.modelId;
       state.lastError=null;
+      updateQwenButton();
       if(!silent)print("system","QWEN>",`listo · ${q.state.modelId} · ${q.state.device}/${q.state.dtype}`);
       return true;
     }catch(err){
       state.ready=false;
       state.lastError=String(err?.message||err);
+      updateQwenButton();
       if(!silent)print("error","QWEN>",`no se pudo cargar Qwen · ${state.lastError}`);
       return false;
     }
@@ -366,15 +369,14 @@
     }
 
     if(sub==="qwen"||sub==="load"){
-      state.mode="qwen";
-      state.enabled=true;
-      loadQwen(false);
+      activateQwen();
       return;
     }
 
     if(sub==="bridge"){
       state.mode="bridge";
       state.enabled=true;
+      updateQwenButton();
       state.ready=state.bridgeReady;
       print("system","NEURAL>",`backend cambiado a bridge local · ${state.endpoint}`);
       health(false);
@@ -383,6 +385,7 @@
 
     if(sub==="off"){
       state.enabled=false;
+      updateQwenButton();
       print("system","NEURAL>","modo neuronal desactivado; las respuestas vuelven a la capa simbólica.");
       return;
     }
@@ -410,6 +413,7 @@
       window.NpcIntQwenBrowser?.reset?.();
       if(state.mode==="qwen")state.ready=false;
       state.lastError=null;
+      updateQwenButton();
       print("system","QWEN>","runtime reiniciado; el modelo se volverá a cargar desde caché o red cuando se necesite.");
       return;
     }
