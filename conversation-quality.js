@@ -9,7 +9,7 @@
 
   function ensure(b){
     if(b.conversationQuality)return b.conversationQuality;
-    b.conversationQuality={version:3,turns:0,variation:0,lastIntent:null,lastRepair:null,lastReply:null,lastUserInput:null,userHistory:[]};
+    b.conversationQuality={version:4,turns:0,variation:0,lastIntent:null,lastRepair:null,lastReply:null,lastUserInput:null,firstUserInput:null,userHistory:[]};
     return b.conversationQuality;
   }
 
@@ -19,11 +19,16 @@
   }
 
   function classify(text){
-    const n=QNorm(text),topic=opinionTopic(n);
+    const n=QNorm(text),topic=opinionTopic(n);let mCreator;
     if(/^(?:que fue|cual fue) (?:lo )?ultimo que te pregunte$/.test(n) || /^(?:que|cual) fue mi ultima pregunta$/.test(n) || /^que te pregunte (?:antes|anteriormente)$/.test(n))return {intent:"ask_last_user_question",raw:text,canonical:n};
+    if(/^(?:que fue|cual fue) (?:lo )?primero que te dije(?: cuando hable contigo)?$/.test(n) || /^(?:que|cual) fue (?:lo )?primero que te dije$/.test(n))return {intent:"ask_first_user_message",raw:text,canonical:n};
+    if(/^(?:vale )?(?:como se llamaba|como se llama) mi (?:perro|perra|gato|gata|mascota)(?: que tuve)?$/.test(n))return {intent:"ask_pet_name",raw:text,canonical:n};
+    if(/^(?:vale )?(?:cuando se murio|cuando murio|cuando fallecio) mi (?:perro|perra|gato|gata|mascota)(?: que tuve)?$/.test(n))return {intent:"ask_pet_death_time",raw:text,canonical:n};
+    if(/^(?:vale )?(?:que|cual) mision (?:te gustaria|quisieras|quieres) crear$/.test(n) || /^(?:vale )?que mision se te ocurre(?: crear)?$/.test(n))return {intent:"ask_mission_idea",raw:text,canonical:n};
+    if((mCreator=n.match(/^te cree con (?:la )?finalidad de (.+)$/)))return {intent:"creator_purpose_statement",purpose:mCreator[1],raw:text,canonical:n};
     if(/\bno te pregunte eso\b/.test(n)&&/\bmira lo que te dije\b/.test(n))return {intent:"repair_wrong_answer",raw:text,canonical:n};
     if(/^(?:alguna vez )?(?:cambiaste|has cambiado) de opinion(?: sobre algo)?$/.test(n) || /^alguna vez has cambiado de parecer(?: sobre algo)?$/.test(n))return {intent:"ask_changed_mind",raw:text,canonical:n};
-    if(/^(?:eso )?te (?:pregunte|habia preguntado)$/.test(n) || /^(?:eso )?era lo que te (?:pregunte|habia preguntado)$/.test(n))return {intent:"repair_repeat_question",raw:text,canonical:n};
+    if(/^(?:eso )?te (?:pregunte|habia preguntado)$/.test(n) || /^(?:eso )?era lo que te (?:pregunte|habia preguntado)$/.test(n) || /^te pregunte que cuando paso$/.test(n) || /^eso era lo que te pregunte que cuando paso$/.test(n))return {intent:"repair_repeat_question",raw:text,canonical:n};
     if(/^(?:pero )?(?:ya )?no te estoy hablando de eso$/.test(n) || /^(?:pero )?mira lo que te dije$/.test(n) || /^mira lo que te dije$/.test(n))return {intent:"repair_topic_drift",raw:text,canonical:n};
     if(/^(?:pero )?(?:eso )?no (?:fue |era )?(?:lo )?que (?:te )?pregunte$/.test(n) || /^(?:pero )?no (?:te )?pregunte eso$/.test(n) || /^(?:pero )?yo no pregunte eso$/.test(n) || /^esa no era mi pregunta$/.test(n))return {intent:"repair_wrong_answer",raw:text,canonical:n};
     if(/^(?:pero )?no (?:dije|quise decir) eso$/.test(n))return {intent:"repair_misread",raw:text,canonical:n};
@@ -132,6 +137,37 @@
     return prior&&!String(classify(prior).intent||"").startsWith("repair_")?prior:null;
   }
 
+  function petAnswer(b,kind){
+    const pet=window.NpcIntSocialMemory?.latestPet?.(b);
+    if(!pet)return kind==="name"
+      ?"No tengo registrado el nombre de una mascota tuya."
+      :"No tengo registrado cuándo ocurrió eso con una mascota tuya.";
+    const data=pet.data||{};
+    const name=data.name||(/^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ-]+$/.test(String(pet.value||""))?pet.value:null);
+    if(kind==="name"){
+      return name?`El ${data.species||"animal"} del que me hablaste se llamaba ${name}.`:"Recuerdo que me hablaste de una mascota, pero no tengo su nombre registrado.";
+    }
+    const when=data.when;
+    if(when?.type==="user_age"&&Number.isFinite(Number(when.age)))return `Me dijiste que ${name?name+" ":""}murió cuando tenías ${Number(when.age)} años.`;
+    if(when?.type==="relative"&&when.value)return `Me dijiste que ${name?name+" ":""}murió ${when.value}.`;
+    return `Recuerdo que ${name?name:"tu mascota"} murió, pero no tengo registrado con precisión cuándo ocurrió.`;
+  }
+
+  function firstUserAnswer(b,ctx={}){
+    const first=ctx.firstUser||ensure(b).firstUserInput||null;
+    return first?`Lo primero que me dijiste en esta sesión fue: «${clip(first,145)}».`:"No tengo disponible el primer mensaje de esta sesión.";
+  }
+
+  function missionIdeaAnswer(){
+    return "Crearía una misión llamada «La sala que cambia de reglas»: el jugador entra en un escenario con tres rutas y una regla oculta. Cada decisión modifica una parte del entorno, y yo actuaría como director de la misión: observaría lo que intenta hacer, introduciría consecuencias y adaptaría el siguiente reto sin cambiar las reglas arbitrariamente.";
+  }
+
+  function creatorPurposeAnswer(b,frame){
+    if(!b.selfModel)b.selfModel={};
+    b.selfModel.creatorIntent=frame.purpose;
+    return `Entiendo. Me estás diciendo que me creaste con la finalidad de «${frame.purpose}». Lo tomo como una intención de diseño sobre mí, no como una preferencia tuya ni como algo que deba reinterpretar.`;
+  }
+
   function changedMindAnswer(b){
     const revisions=(b.mem||[]).filter(m=>/corrig|cambie|cambió|revis|actualic|hipotesis|hipótesis/i.test(String(m.text||""))).slice(-3);
     if(revisions.length){
@@ -146,6 +182,11 @@
         const previous=lastUserQuestion(ctx);
         return previous?`La última pregunta que me hiciste fue: «${clip(previous,140)}».`:"No encuentro una pregunta anterior tuya en el historial de esta sesión.";
       }
+      case "ask_first_user_message":return firstUserAnswer(b,ctx);
+      case "ask_pet_name":return petAnswer(b,"name");
+      case "ask_pet_death_time":return petAnswer(b,"time");
+      case "ask_mission_idea":return missionIdeaAnswer();
+      case "creator_purpose_statement":return creatorPurposeAnswer(b,frame);
       case "ask_changed_mind":return changedMindAnswer(b);
       case "repair_repeat_question":{
         const previous=previousSubstantiveUser(ctx);
@@ -230,6 +271,7 @@
     const priorHistory=Array.isArray(quality.userHistory)?quality.userHistory.slice(-12):[];
     const ctx={
       priorUser:priorLiteral,
+      firstUser:quality.firstUserInput,
       userHistory:priorHistory,
       priorNpc:this.dialogue?.lastNpc || this.companionState?.lastReply || this.discourse?.previousNpc || "",
       priorPragmaticTopic:this.pragmatics?.meaningfulTopic || null,
@@ -256,6 +298,7 @@
       quality.turns++;
       quality.lastIntent=frame.intent||"pass_through";
       quality.lastUserInput=raw;
+      if(!quality.firstUserInput)quality.firstUserInput=raw;
       quality.userHistory.push(raw);
       if(quality.userHistory.length>24)quality.userHistory.splice(0,quality.userHistory.length-24);
       quality.lastReply=finalText||null;
@@ -269,10 +312,10 @@
   };
 
   window.NpcIntConversationQuality={
-    classify,refine,isInternalFocus,lastUserQuestion,previousSubstantiveUser,changedMindAnswer,
+    classify,refine,isInternalFocus,lastUserQuestion,previousSubstantiveUser,changedMindAnswer,petAnswer,firstUserAnswer,missionIdeaAnswer,
     config:{knowledgeMatching:"native:knowledge.js"}
   };
 
   ensure(brain);
-  print("system","","calidad conversacional v1.3 cargada · cambio de opinión + reparación de deriva + historial literal");
+  print("system","","calidad conversacional v1.4 cargada · memoria autobiográfica de mascotas + primer turno + misiones + reparaciones");
 })();
