@@ -2,6 +2,72 @@
 
 (function(){
   const state={enabled:false,mode:"qwen",endpoint:"http://127.0.0.1:8765",ready:false,bridgeReady:false,backend:null,model:null,checking:false,lastError:null};
+  const qwenButton=document.getElementById("qwenToggle");
+  const qwenButtonLabel=document.getElementById("qwenToggleLabel");
+
+  function updateQwenButton(progress=null){
+    if(!qwenButton||!qwenButtonLabel)return;
+    const q=window.NpcIntQwenBrowser?.state;
+    const supported=!!q?.supported;
+    const active=state.enabled&&state.mode==="qwen"&&!!q?.ready;
+    const loading=!!q?.loading;
+    const failed=!!state.lastError&&!q?.ready;
+
+    qwenButton.disabled=false;
+    qwenButton.setAttribute("aria-pressed",active?"true":"false");
+
+    if(!supported){
+      qwenButton.dataset.state="unsupported";
+      qwenButtonLabel.textContent="QWEN · SIN WEBGPU";
+      qwenButton.disabled=true;
+      return;
+    }
+    if(active){
+      qwenButton.dataset.state="active";
+      qwenButtonLabel.textContent="QWEN · ACTIVO";
+      qwenButton.disabled=true;
+      return;
+    }
+    if(loading){
+      const p=Number(progress??q?.progress);
+      qwenButton.dataset.state="loading";
+      qwenButtonLabel.textContent=Number.isFinite(p)&&p>0?"QWEN · "+Math.round(p)+"%":"QWEN · CARGANDO";
+      qwenButton.disabled=true;
+      return;
+    }
+    if(failed){
+      qwenButton.dataset.state="error";
+      qwenButtonLabel.textContent="REINTENTAR QWEN";
+      return;
+    }
+    if(q?.ready){
+      qwenButton.dataset.state="ready";
+      qwenButtonLabel.textContent="ACTIVAR QWEN";
+      return;
+    }
+    qwenButton.dataset.state="idle";
+    qwenButtonLabel.textContent="ACTIVAR QWEN";
+  }
+
+  async function activateQwen(){
+    const q=window.NpcIntQwenBrowser;
+    state.mode="qwen";
+    state.lastError=null;
+    if(!q?.state?.supported){
+      state.enabled=false;
+      updateQwenButton();
+      print("error","QWEN>","WebGPU no está disponible en este navegador.");
+      return false;
+    }
+    state.enabled=true;
+    updateQwenButton();
+    const pending=loadQwen(false);
+    updateQwenButton();
+    const ok=await pending;
+    if(!ok)state.enabled=false;
+    updateQwenButton();
+    return ok;
+  }
 
   function compactMemory(){return (brain.mem||[]).slice(-10).map(m=>({type:m.type,text:m.text,salience:m.salience,time:m.time}));}
   function compactCycle(){
@@ -141,6 +207,7 @@
         onProgress:x=>{
           const file=String(x?.file||"");
           const p=Number(x?.progress)||0;
+          updateQwenButton(p);
           if(!silent&&/\.onnx(?:$|\?)/i.test(file)){
             const bucket=Math.floor(p/25)*25;
             if(bucket>=25&&bucket>lastBucket){
@@ -154,11 +221,13 @@
       state.backend=`browser-${q.state.device||"webgpu"}`;
       state.model=q.state.modelId;
       state.lastError=null;
+      updateQwenButton();
       if(!silent)print("system","QWEN>",`listo · ${q.state.modelId} · ${q.state.device}/${q.state.dtype}`);
       return true;
     }catch(err){
       state.ready=false;
       state.lastError=String(err?.message||err);
+      updateQwenButton();
       if(!silent)print("error","QWEN>",`no se pudo cargar Qwen · ${state.lastError}`);
       return false;
     }
@@ -294,23 +363,21 @@
         print("system","NEURAL>","modo neuronal activado · backend=bridge local");
         health(false);
       }else{
-        state.mode="qwen";
         print("system","NEURAL>","modo neuronal activado · backend=Qwen3-0.6B WebGPU");
-        loadQwen(false);
+        activateQwen();
       }
       return;
     }
 
     if(sub==="qwen"||sub==="load"){
-      state.mode="qwen";
-      state.enabled=true;
-      loadQwen(false);
+      activateQwen();
       return;
     }
 
     if(sub==="bridge"){
       state.mode="bridge";
       state.enabled=true;
+      updateQwenButton();
       state.ready=state.bridgeReady;
       print("system","NEURAL>",`backend cambiado a bridge local · ${state.endpoint}`);
       health(false);
@@ -319,6 +386,7 @@
 
     if(sub==="off"){
       state.enabled=false;
+      updateQwenButton();
       print("system","NEURAL>","modo neuronal desactivado; las respuestas vuelven a la capa simbólica.");
       return;
     }
@@ -346,6 +414,7 @@
       window.NpcIntQwenBrowser?.reset?.();
       if(state.mode==="qwen")state.ready=false;
       state.lastError=null;
+      updateQwenButton();
       print("system","QWEN>","runtime reiniciado; el modelo se volverá a cargar desde caché o red cuando se necesite.");
       return;
     }
@@ -376,6 +445,13 @@
     if(output)window.setTimeout(()=>print("npc",brain.identity.name+">",output),120);
   };
 
-  window.NpcIntNeuralWeb={state,health,loadQwen,generate,browserMessages,contextFor,compactCompanion};
-  print("system","","capa neuronal web v0.6 cargada · Qwen3-0.6B WebGPU + bridge local · /neural qwen");
+  qwenButton?.addEventListener("click",event=>{
+    event.preventDefault();
+    event.stopPropagation();
+    activateQwen();
+  });
+  updateQwenButton();
+
+  window.NpcIntNeuralWeb={state,health,loadQwen,activateQwen,updateQwenButton,generate,browserMessages,contextFor,compactCompanion};
+  print("system","","capa neuronal web v0.7 cargada · Qwen3-0.6B WebGPU + bridge local · botón Qwen disponible");
 })();
