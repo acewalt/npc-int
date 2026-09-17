@@ -3,10 +3,13 @@
 (function(){
   const PNorm=s=>(s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9ñ¿?¡! ]+/g," ").replace(/\s+/g," ").trim();
 
-  const HOSTILE={
-    "malparido":.92,"malparida":.92,"caremonda":.82,"caremonda":.82,
+  // Estos valores solo gradúan intensidad. La pertenencia al vocabulario hostil
+  // proviene exclusivamente de NpcIntMentalCycle.hostileTerms.
+  const HOSTILE_WEIGHTS={
+    "malparido":.92,"malparida":.92,"caremonda":.82,
     "hijueputa":.95,"hpta":.88,"gonorrea":.76,"idiota":.72,"imbecil":.72,"estupido":.68
   };
+  const DEFAULT_HOSTILE_WEIGHT=.64;
   const FRIENDLY=new Set(["gracias","bacano","bacana","chevere","bien","genial","parce","amigo","amiga"]);
   const CLARIFY=new Set(["que","como","eh","ah","mande","perdon","no entendi"]);
   const TRIVIAL=new Set(["hola","buenas","hey","ey","que onda","ok","okay","vale","si","no","aja"]);
@@ -27,10 +30,20 @@
     if(b.relation.respect===undefined)b.relation.respect=.62;
   }
 
-  function words(text){return PNorm(text).split(" ").filter(Boolean);}
+  function words(text){return PNorm(text).match(/[a-z0-9ñ]+/g)||[];}
+  function hostileVocabulary(){
+    const terms=window.NpcIntMentalCycle?.hostileTerms;
+    if(!Array.isArray(terms))
+      throw new Error("pragmatics.js requiere NpcIntMentalCycle.hostileTerms antes de procesar mensajes");
+    return new Set(terms);
+  }
   function hostileScore(text){
+    const vocabulary=hostileVocabulary();
     const ws=words(text); let score=0;
-    for(const w of ws)score=Math.max(score,HOSTILE[w]||0);
+    for(const w of ws){
+      if(!vocabulary.has(w))continue;
+      score=Math.max(score,HOSTILE_WEIGHTS[w]??DEFAULT_HOSTILE_WEIGHT);
+    }
     return score;
   }
   function friendlyScore(text){
@@ -62,6 +75,8 @@
     if(words(text).length<=2)return "fragment";
     return "statement";
   }
+
+  window.NpcIntPragmatics=Object.freeze({hostileScore,actOf});
 
   function explainPrevious(b){
     const prev=b.dialogue?.lastNpc||"";

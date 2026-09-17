@@ -223,6 +223,10 @@ respuesta / acción Unity
 
 `brain-pipeline.js` se carga antes de `mental-cycle.js` y `cognitive-state.js`. Ambos módulos ya registran etapas explícitas de preparación/percepción y decisión/actualización; conservan sus comandos y wrappers de `reset`. Los módulos heredados pueden seguir migrándose uno por uno sin cambiar de golpe el orden observable de la cadena. Usa `/pipeline` para inspeccionar el orden registrado y la última traza.
 
+En `hear`, el orden efectivo es `cognitive-state:prepare` y `mental-cycle:perceive` (`before`), luego la cadena legacy —incluida pragmática— y finalmente `mental-cycle:decide` y `cognitive-state:refresh` (`after`). La lista plana de la traza conserva ese orden de ejecución, pero `/pipeline` también muestra la fase de cada etapa.
+
+El vocabulario base de hostilidad vive en `config/mental-cycle.v1.json`. `mental-cycle.js` expone esa vista canónica a `pragmatics.js` y `relationship-model.js`, que solo añaden intensidad y efectos sociales; `MentalPerceptionVocabulary` refleja el mismo contrato en C# para Unity. Los tests comparan JSON, percepción JS, pragmática, relación social y Core C# para impedir que las listas vuelvan a divergir.
+
 ## Temas propios e iniciativa social
 
 NIA ya no depende únicamente de repetir algo que el jugador dijo antes para iniciar una conversación. `knowledge/social-topics.es.json` contiene 80 temas curados, con posturas provisionales y preguntas del personaje, repartidos entre videojuegos, desarrollo/Unity/IA local, creatividad/ciencia/cultura y vida cotidiana. No es conocimiento enciclopédico ni una biografía ficticia: cada entrada declara contenido que NIA puede plantear como opinión de personaje.

@@ -103,7 +103,7 @@ namespace NpcInt.Core
             if (ContainsAny(n, "puerta", "cerradura", "llave")) p.Tags.Add("door");
             if (ContainsAny(n, "oscuro", "oscuridad", "luz", "luces")) p.Tags.Add("visibility");
             if (ContainsAny(n, "ayuda", "auxilio", "herido", "dolor")) p.Tags.Add("distress");
-            if (ContainsAny(n, "malparido", "caremonda", "hijueputa", "gonorrea", "idiota", "imbecil", "estupido"))
+            if (MentalPerceptionVocabulary.ContainsHostileToken(n))
             {
                 p.Tags.Add("hostile");
                 p.Threat = Math.Max(p.Threat, 0.28f);
@@ -146,7 +146,9 @@ namespace NpcInt.Core
 
             AddGoal(goals, "purpose", "actuar de acuerdo con mi propósito", _brain.Drives.Purpose * 0.72f, "propósito persistente");
 
-            if (_brain.Relation.Trust < 0.35f)
+            if (HasTag(p, "hostile"))
+                AddGoal(goals, "boundaries", "proteger la relación y mis límites", 0.78f, "lenguaje hostil detectado en la percepción actual");
+            else if (_brain.Relation.Trust < 0.35f)
                 AddGoal(goals, "boundaries", "proteger la relación y mis límites", 0.62f, "confianza interpersonal baja");
 
             return goals.OrderByDescending(g => g.Priority).ToList();

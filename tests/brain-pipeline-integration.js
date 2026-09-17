@@ -77,11 +77,15 @@ const expectedStages=[
   "cognitive-state:refresh"
 ];
 for(const kind of ["hear","event","tick"]){
-  const actual=pipeline.state.stages[kind]
+  const stages=pipeline.state.stages[kind]
     .slice()
-    .sort((a,b)=>(a.priority-b.priority)||(a.id-b.id))
-    .map(stage=>stage.name);
+    .sort((a,b)=>(a.priority-b.priority)||(a.id-b.id));
+  const actual=stages.map(stage=>stage.name);
   assert.deepStrictEqual(actual,expectedStages,`${kind} debe tener las cuatro etapas migradas en orden`);
+  assert.strictEqual(stages.find(stage=>stage.name==="mental-cycle:perceive")?.phase,"before",`${kind}: perceive debe correr antes del legacy core`);
+  assert.strictEqual(stages.find(stage=>stage.name==="mental-cycle:decide")?.phase,"after",`${kind}: decide debe correr después del legacy core`);
+  assert.deepStrictEqual(stages.filter(stage=>stage.phase==="before").map(stage=>stage.name),["cognitive-state:prepare","mental-cycle:perceive"],`${kind}: las etapas before deben quedar explícitas`);
+  assert.deepStrictEqual(stages.filter(stage=>stage.phase==="after").map(stage=>stage.name),["mental-cycle:decide","cognitive-state:refresh"],`${kind}: las etapas after deben quedar explícitas`);
 }
 
 async function main(){
@@ -193,6 +197,24 @@ async function verifyCompleteBrowserOrder(){
   assert.deepStrictEqual(Array.from(fullPipeline.state.trace.at(-1).stages),expectedStages);
   const hearState=JSON.parse(vm.runInContext("JSON.stringify({input:brain.cognitiveState.current.input,perception:brain.mind.lastCycle.perception.type,idea:!!brain.ideaEngine.current,companion:!!brain.companionState})",browser));
   assert.deepStrictEqual(hearState,{input:"me interesa construir un juego en Unity",perception:"user",idea:true,companion:true},"las capas registradas y los wrappers posteriores deben ejecutar en la misma llamada");
+
+  const hostilityBefore=JSON.parse(vm.runInContext("JSON.stringify({relationTrust:brain.relation.trust,modelTrust:brain.relationshipModel.trust,comfort:brain.relationshipModel.comfort,tension:brain.relationshipModel.tension})",browser));
+  const beforeHostility=fullPipeline.state.trace.length;
+  await Promise.resolve(vm.runInContext('brain.hear("¡Eres una hpta!")',browser));
+  assert.strictEqual(fullPipeline.state.trace.length,beforeHostility+1,"la hostilidad debe atravesar una sola ejecución completa del pipeline");
+  assert.deepStrictEqual(Array.from(fullPipeline.state.trace.at(-1).stages),expectedStages);
+  const hostilityState=JSON.parse(vm.runInContext("JSON.stringify({tags:brain.mind.lastCycle.perception.tags,act:brain.pragmatics.lastAct,tone:brain.pragmatics.lastTone,goals:brain.mind.lastCycle.goals.map(x=>x.id),decision:brain.mind.lastCycle.decision.id,cycleTrust:brain.mind.lastCycle.mentalState.trust,relationTrust:brain.relation.trust,modelTrust:brain.relationshipModel.trust,comfort:brain.relationshipModel.comfort,tension:brain.relationshipModel.tension,hostileStreak:brain.relationshipModel.hostileStreak})",browser));
+  assert.ok(hostilityState.tags.includes("hostile"),"la percepción completa debe reconocer hpta");
+  assert.strictEqual(hostilityState.act,"insult","pragmática debe clasificar hpta como insulto en el navegador completo");
+  assert.strictEqual(hostilityState.tone,"hostil","pragmática debe exponer el tono hostil en el mismo turno");
+  assert.ok(hostilityState.goals.includes("boundaries"),"el motor mental debe generar boundaries en el mismo turno");
+  assert.strictEqual(hostilityState.decision,"set_boundary","la decisión auditable debe marcar un límite");
+  assert.strictEqual(hostilityState.cycleTrust,hostilityState.relationTrust,"la decisión debe observar la confianza actualizada por la cadena legacy");
+  assert.ok(hostilityState.relationTrust<hostilityBefore.relationTrust,"pragmática debe reducir la confianza base");
+  assert.ok(hostilityState.modelTrust<hostilityBefore.modelTrust,"el modelo relacional debe reducir su confianza");
+  assert.ok(hostilityState.comfort<hostilityBefore.comfort,"el modelo relacional debe reducir comodidad");
+  assert.ok(hostilityState.tension>hostilityBefore.tension,"el modelo relacional debe aumentar tensión");
+  assert.strictEqual(hostilityState.hostileStreak,1,"el modelo relacional debe registrar la racha hostil");
 
   const beforeEvent=fullPipeline.state.trace.length;
   await Promise.resolve(vm.runInContext('brain.event("se abrió una puerta")',browser));

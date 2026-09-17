@@ -38,6 +38,18 @@
       "kind": "user",
       "text": "Eres un idiota, cállate.",
       "state": {"hunger": 0.18, "energy": 0.88, "curiosity": 0.32, "fear": 0.08, "trust": 0.20}
+    },
+    {
+      "id": "user_hostility_malparida",
+      "kind": "user",
+      "text": "Eres una malparida.",
+      "state": {"hunger": 0.18, "energy": 0.88, "curiosity": 0.32, "fear": 0.08, "trust": 0.55}
+    },
+    {
+      "id": "user_hostility_hpta",
+      "kind": "user",
+      "text": "¡Eres un hpta!",
+      "state": {"hunger": 0.18, "energy": 0.88, "curiosity": 0.32, "fear": 0.08, "trust": 0.55}
     }
   ]
 }

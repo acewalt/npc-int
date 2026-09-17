@@ -91,7 +91,7 @@ namespace NpcInt.Core
 
             float friendly = ContainsAny(n, "gracias", "bacano", "chevere", "genial", "amigo", "amiga", "parce") ? 0.75f :
                              ContainsAny(n, "bien", "vale", "dale") ? 0.25f : 0f;
-            float hostile = ContainsAny(n, "malparido", "hijueputa", "idiota", "imbecil", "estupido", "callate", "largate") ? 0.90f : 0f;
+            float hostile = MentalPerceptionVocabulary.ContainsHostileToken(n) ? 0.90f : 0f;
             float apology = ContainsAny(n, "perdon", "disculpa", "lo siento") ? 0.75f : 0f;
             bool selfDisclosure = ContainsAny(n, "me gusta", "no me gusta", "prefiero", "quiero", "estoy haciendo", "estoy creando", "estoy trabajando", "me llamo", "mi nombre es");
             bool asksAboutNpc = (n.Contains(" tu") || n.StartsWith("tu ") || n.Contains(" te ")) &&

@@ -21,7 +21,7 @@
     const n=norm(text),ws=new Set(n.split(" "));
     const has=(...xs)=>xs.some(x=>n.includes(x));
     const friendly=has("gracias","bacano","chevere","genial","me gusta hablar","amigo","amiga","parce") ? .75 : has("bien","vale","dale") ? .25 : 0;
-    const hostile=has("malparido","hijueputa","idiota","imbecil","estupido","callate","largate") ? .9 : has("molesta","fastidias") ? .45 : 0;
+    const hostile=window.NpcIntMentalCycle?.isHostile?.(text) ? .9 : has("molesta","fastidias") ? .45 : 0;
     const apology=has("perdon","disculpa","lo siento") ? .75 : 0;
     const asksAboutNpc=/\b(tu|te)\b/.test(n)&&/\b(que|como|cual|donde|por que|porque)\b/.test(n);
     const selfDisclosure=/\b(me gusta|no me gusta|prefiero|quiero|estoy haciendo|estoy trabajando|me llamo|mi nombre es|hoy hice|ayer hice)\b/.test(n);

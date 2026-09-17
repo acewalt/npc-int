@@ -6,6 +6,21 @@
     "fearCarry": 0.82,
     "fearThreatWeight": 0.72
   },
+  "perception": {
+    "hostileTerms": [
+      "malparido",
+      "malparida",
+      "caremonda",
+      "hijueputa",
+      "hpta",
+      "gonorrea",
+      "idiota",
+      "imbecil",
+      "estupido",
+      "callate",
+      "largate"
+    ]
+  },
   "goalThresholds": {
     "food": 0.22,
     "restEnergyBelow": 0.78,

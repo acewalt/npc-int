@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "mental-cycle.js"
+      - "config/mental-cycle.v1.json"
       - "src/NpcInt.Core/**"
       - "tests/parity/**"
       - "tests/mental-parity-js.js"
@@ -13,6 +14,7 @@ on:
   pull_request:
     paths:
       - "mental-cycle.js"
+      - "config/mental-cycle.v1.json"
       - "src/NpcInt.Core/**"
       - "tests/parity/**"
       - "tests/mental-parity-js.js"
@@ -37,7 +39,7 @@ jobs:
       - name: Run JavaScript reference scenarios
         run: node tests/mental-parity-js.js > /tmp/mental-js.json
       - name: Run C# reference scenarios
-        run: dotnet run --project tests/NpcInt.Core.ParitySmoke/NpcInt.Core.ParitySmoke.csproj --configuration Release -- tests/parity/mental-scenarios.json > /tmp/mental-cs.json
+        run: dotnet run --project tests/NpcInt.Core.ParitySmoke/NpcInt.Core.ParitySmoke.csproj --configuration Release -- tests/parity/mental-scenarios.json config/mental-cycle.v1.json > /tmp/mental-cs.json
       - name: Compare normalized decisions
         shell: python
         run: |

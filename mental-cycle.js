@@ -3,6 +3,17 @@
 (function(){
   const MNorm=s=>(s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9ñ¿?¡! ]+/g," ").replace(/\s+/g," ").trim();
   const MClamp=(v,a=0,b=1)=>Math.max(a,Math.min(b,v));
+  // Sincronizado con config/mental-cycle.v1.json#perception.hostileTerms.
+  const HOSTILE_TERMS=Object.freeze([
+    "malparido","malparida","caremonda","hijueputa","hpta","gonorrea",
+    "idiota","imbecil","estupido","callate","largate"
+  ]);
+  const HOSTILE_TERM_SET=new Set(HOSTILE_TERMS);
+
+  function isHostile(text){
+    const tokens=MNorm(text).match(/[a-z0-9ñ]+/g)||[];
+    return tokens.some(token=>HOSTILE_TERM_SET.has(token));
+  }
 
   function ensureMind(b){
     if(b.mind)return;
@@ -36,9 +47,17 @@
     if(has("ayuda","auxilio","herido","dolor"))tags.push("distress");
     if(has("hola","buenas","hey","que onda"))tags.push("greeting");
     if(/[?¿]/.test(text))tags.push("question");
-    if(has("malparido","caremonda","hijueputa","gonorrea","idiota","imbecil","estupido"))tags.push("hostile");
+    if(isHostile(n))tags.push("hostile");
     return tags;
   }
+
+  // API canónica de percepción. Pragmatics consulta hostileTerms en cada mensaje:
+  // no mantiene una segunda lista que pueda divergir de esta.
+  window.NpcIntMentalCycle=Object.freeze({
+    detect,
+    isHostile,
+    hostileTerms:HOSTILE_TERMS
+  });
 
   function perceive(b,type,text,meta={}){
     ensureMind(b);
@@ -110,7 +129,10 @@
     if(curiosity>.35)add("understand","reducir incertidumbre",curiosity*(p?.tags.includes("question")?.85:.65),"curiosidad activa");
     if(p?.type==="user")add("social","mantener una interacción coherente",Math.max(.35,m.needs.social*.75),"hay un interlocutor presente");
     if(b.drives?.proposito>.25)add("purpose","actuar de acuerdo con mi propósito",b.drives.proposito*.72,"propósito persistente");
-    if((b.relation?.trust??.5)<.35)add("boundaries","proteger la relación y mis límites",.62,"confianza interpersonal baja");
+    if(p?.tags.includes("hostile"))
+      add("boundaries","proteger la relación y mis límites",.78,"lenguaje hostil detectado en la percepción actual");
+    else if((b.relation?.trust??.5)<.35)
+      add("boundaries","proteger la relación y mis límites",.62,"confianza interpersonal baja");
 
     goals.sort((a,c)=>c.priority-a.priority);
     m.goals=goals;

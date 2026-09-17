@@ -508,7 +508,8 @@ namespace NpcInt.Core
             string n = MemoryStore.Normalize(message);
             float score = 0f;
             if (ContainsAny(n, "gracias", "bien", "genial", "me gusta", "amigo", "excelente")) score += 0.45f;
-            if (ContainsAny(n, "odio", "mal", "idiota", "callate", "muere", "matar", "peligro")) score -= 0.55f;
+            if (ContainsAnyToken(n, "odio", "mal", "malo", "mala", "malos", "malas", "muere", "matar", "peligro") ||
+                MentalPerceptionVocabulary.ContainsHostileToken(n)) score -= 0.55f;
             return MathUtil.Clamp(score, -1f, 1f);
         }
 
@@ -547,6 +548,11 @@ namespace NpcInt.Core
             for (int i = 0; i < values.Length; i++)
                 if (source.IndexOf(values[i], StringComparison.Ordinal) >= 0) return true;
             return false;
+        }
+
+        private static bool ContainsAnyToken(string source, params string[] values)
+        {
+            return MemoryStore.Tokens(source).Overlaps(values);
         }
 
         private static bool StartsWithAny(string source, params string[] values)

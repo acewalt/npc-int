@@ -51,6 +51,62 @@ internal static class Program
     public static int Main(string[] args)
     {
         string scenarioPath = args.Length > 0 ? args[0] : "tests/parity/mental-scenarios.json";
+        string configPath = args.Length > 1 ? args[1] : "config/mental-cycle.v1.json";
+        using JsonDocument config = JsonDocument.Parse(File.ReadAllText(configPath));
+        string[] configuredHostileTerms = config.RootElement
+            .GetProperty("perception")
+            .GetProperty("hostileTerms")
+            .EnumerateArray()
+            .Select(term => term.GetString() ?? string.Empty)
+            .ToArray();
+        if (!MentalPerceptionVocabulary.HostileTerms.SequenceEqual(configuredHostileTerms, StringComparer.Ordinal))
+        {
+            throw new InvalidOperationException(
+                "Vocabulario hostil C#/config divergente. " +
+                $"C#=[{string.Join(",", MentalPerceptionVocabulary.HostileTerms)}] " +
+                $"config=[{string.Join(",", configuredHostileTerms)}]");
+        }
+
+        foreach (string term in configuredHostileTerms)
+        {
+            if (!MentalPerceptionVocabulary.ContainsHostileToken($"¡Eres {term}!"))
+                throw new InvalidOperationException($"El detector C# no consume el término hostil configurado: {term}");
+
+            var probe = new MentalCycleEngine(new NpcBrain(73));
+            MentalCycleResult probeCycle = probe.ThinkMessage($"¡Eres {term}!");
+            if (!probeCycle.Perception.Tags.Contains("hostile") ||
+                !probeCycle.Goals.Any(goal => goal.Id == "boundaries") ||
+                probeCycle.Decision?.Kind != MentalActionKind.SetBoundary)
+                throw new InvalidOperationException($"El ciclo mental C# no aplica percepción, objetivo y límite para: {term}");
+
+            var sentimentProbe = new NpcBrain(74);
+            sentimentProbe.ProcessMessage($"¡Eres {term}!");
+            float recordedValence = sentimentProbe.Memory.Items.Last(entry => entry.Kind == "dialogue").Valence;
+            if (recordedValence >= 0f)
+                throw new InvalidOperationException($"El sentimiento C# no refleja el término hostil compartido: {term}");
+        }
+
+        foreach (string nonTerm in new[] { "normal", "animal", "idiotamente", "malparidazo", "hptatico", "hijueputazo", "imbecilidad" })
+        {
+            if (MentalPerceptionVocabulary.ContainsHostileToken(nonTerm))
+                throw new InvalidOperationException($"El detector C# produjo un falso positivo por subcadena: {nonTerm}");
+
+            var sentimentProbe = new NpcBrain(75);
+            sentimentProbe.ProcessMessage(nonTerm);
+            float recordedValence = sentimentProbe.Memory.Items.Last(entry => entry.Kind == "dialogue").Valence;
+            if (recordedValence < 0f)
+                throw new InvalidOperationException($"El sentimiento C# produjo un falso positivo por subcadena: {nonTerm}");
+        }
+
+        foreach (string negativeSignal in new[] { "odio", "mal", "malo", "mala", "malos", "malas", "muere", "matar", "peligro" })
+        {
+            var sentimentProbe = new NpcBrain(76);
+            sentimentProbe.ProcessMessage(negativeSignal);
+            float recordedValence = sentimentProbe.Memory.Items.Last(entry => entry.Kind == "dialogue").Valence;
+            if (recordedValence >= 0f)
+                throw new InvalidOperationException($"El sentimiento C# dejó de reconocer la señal negativa no hostil: {negativeSignal}");
+        }
+
         ScenarioFile input = JsonSerializer.Deserialize<ScenarioFile>(File.ReadAllText(scenarioPath))
             ?? throw new InvalidOperationException("No se pudo leer el archivo de escenarios.");
 
