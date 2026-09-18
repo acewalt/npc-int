@@ -113,7 +113,7 @@
     const negativeColorSegment=(n.match(/\bno me gusta(?:n)?\s+([^,;.]+)/)||[])[1]||"";
     const dislikedColors=colorsIn(negativeColorSegment);
     const positiveSegments=[...n.matchAll(/(?:^|[,;.])?\s*(?:pero\s+)?(?:me gusta(?:n)?|me gusta es|solo me gusta|me gusta solo)\s+([^,;.]+)/g)].map(x=>x[1]);
-    let likedColors=[...new Set(positiveSegments.flatMap(colorsIn))];
+    let likedColors=[...new Set(positiveSegments.flatMap(colorsIn))].filter(color=>!dislikedColors.includes(color));
     if(!likedColors.length&&/\bm+e gusta(?:n|ba|ban)?\b/.test(n)){
       likedColors=colorsIn(n).filter(color=>!dislikedColors.includes(color));
     }
