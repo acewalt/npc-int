@@ -428,6 +428,6 @@
   };
 
   ensure(brain);
-  window.NpcIntIntentRouter={version:VERSION,ensure,resolve,currentFor,routeFor,authoritative,embed,cosine,format,domainFor,syncQueryFrame,repairInput,usefulWords};
+  window.NpcIntIntentRouter={version:VERSION,ensure,resolve,currentFor,routeFor,authoritative,embed,cosine,semanticPrototype,format,domainFor,syncQueryFrame,repairInput,usefulWords};
   print("system","","intent router v1.2 cargado · subespacios hash + guardia de entradas cortas + continuidad de ideas");
 })();
