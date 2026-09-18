@@ -7,7 +7,7 @@
     char:{offset:2048,size:2048}
   };
   const DIM=4096;
-  const VERSION="1.2";
+  const VERSION="1.3";
 
   function repairInput(s){
     return String(s||"")
@@ -34,7 +34,7 @@
     cambiastes:"cambiar",cambiaste:"cambiar",cambiado:"cambiar",opinion:"opinion",opinión:"opinion"
   };
 
-  const stop=new Set(["el","la","los","las","un","una","unos","unas","de","del","a","al","en","y","o","que","por","para","con","mi","mis","tu","tus","me","te","se","lo","le","ya"]);
+  const stop=new Set(["el","la","los","las","un","una","unos","unas","de","del","a","al","en","y","o","que","por","para","con","se","lo","le","ya"]);
 
   function words(text){
     return norm(text).split(" ").filter(Boolean).map(w=>synonym[w]||w);
@@ -181,15 +181,33 @@
 
     if(/^(?:vale )?(?:como se llamaba|como se llama|cual era el nombre de) mi (?:perro|perra|gato|gata|mascota)(?: que tuve)?$/.test(n))
       return {intent:"ask_pet_name",confidence:.995,source:"structural",domain:"memory"};
+
+    // Preferencias de NIA y del jugador se distinguen por el pronombre explícito.
+    if((m=n.match(/^(?:que|cual)\s+(.{2,40}?)\s+te gusta(?:n)?(?: a ti)?$/)) ||
+       (m=n.match(/^cual es tu\s+(.{2,40}?)\s+favorit[oa]$/))){
+      return {intent:"ask_companion_preference",confidence:.995,source:"structural",domain:"social",slots:{category:m[1].trim()}};
+    }
     if(/^(?:vale )?(?:cuando se murio|cuando murio|cuando fallecio|en que momento murio) mi (?:perro|perra|gato|gata|mascota)(?: que tuve)?$/.test(n) ||
        /^(?:y )?a que edad (?:yo )?tenia cuando murio mi (?:perro|perra|gato|gata|mascota)$/.test(n) ||
        /^(?:y )?a que edad murio(?: mi (?:perro|perra|gato|gata|mascota))?$/.test(n))
       return {intent:"ask_pet_death_time",confidence:.995,source:"structural",domain:"memory"};
 
     if(/^(?:que|cuales?) colores? (?:me gusta|me gustan|prefiero)(?: a mi)?$/.test(n) ||
-       /^cual es mi color favorito$/.test(n) ||
        /^(?:y )?cual otro color me gusta(?: a mi)?$/.test(n))
       return {intent:"ask_user_color_preference",confidence:.995,source:"structural",domain:"memory"};
+
+    // Consulta personal genérica. La categoría sale de la frase, no de similitud con "color".
+    if((m=n.match(/^cual es mi\s+(.{2,48}?)\s+favorit[oa]$/)) ||
+       (m=n.match(/^que\s+(.{2,48}?)\s+es mi favorit[oa]$/)) ||
+       (m=n.match(/^recuerdas mi\s+(.{2,48}?)\s+favorit[oa]$/))){
+      return {intent:"ask_personal_fact",confidence:.995,source:"structural",domain:"memory",slots:{category:m[1].trim(),qualifier:"favorite"}};
+    }
+    if((m=n.match(/^cual es mi\s+(.{2,48})$/)) ||
+       (m=n.match(/^recuerdas mi\s+(.{2,48})$/))){
+      const category=m[1].trim();
+      if(!/^(?:proposito|propósito|estado|nombre del perro|perro)$/.test(category))
+        return {intent:"ask_personal_fact",confidence:.97,source:"structural",domain:"memory",slots:{category,qualifier:"value"}};
+    }
 
     if(/^(?:que|cual) idea (?:es )?(?:la )?que me gusta$/.test(n) ||
        /^(?:que|cual) idea dije que me gustaba$/.test(n))
@@ -217,10 +235,15 @@
     if((m=n.match(/^te cree con (?:la )?finalidad de (.+)$/)))
       return {intent:"creator_purpose_statement",confidence:.99,source:"structural",domain:"identity",slots:{purpose:m[1]}};
 
-    if(!question&&(m=n.match(/^(?:mi )?color favorito es (?:el |la )?(.+)$/)))
-      return {intent:"preference_statement",confidence:.99,source:"structural",domain:"personal",slots:{category:"color",value:m[1]}};
-    if(!question&&(m=n.match(/^m+e gusta(?:n|ba|ban)? (.+)$/)))
-      return {intent:"preference_statement",confidence:.98,source:"structural",domain:"personal",slots:{value:m[1]}};
+    if(!question&&(m=n.match(/^mi\s+(.{2,48}?)\s+favorit[oa]s?\s+(?:es|son)\s+(.+)$/))){
+      return {intent:"personal_fact_statement",confidence:.995,source:"structural",domain:"personal",slots:{category:m[1].trim(),qualifier:"favorite",value:m[2].trim()}};
+    }
+    if(!question&&(m=n.match(/^mi\s+(.{2,48}?)\s+(?:es|son)\s+(.+)$/))&&!/\b(?:gusta|prefier)\b/.test(m[1])){
+      return {intent:"personal_fact_statement",confidence:.97,source:"structural",domain:"personal",slots:{category:m[1].trim(),qualifier:"value",value:m[2].trim()}};
+    }
+    if(!question&&/\bme gusta(?:n)?\b/.test(n)){
+      return {intent:"preference_statement",confidence:.985,source:"structural",domain:"personal"};
+    }
 
     if(!question&&/\b(?:murio|fallecio|se murio)\b/.test(n)&&/\b(?:perro|perra|gato|gata|mascota)\b/.test(n))
       return {intent:"personal_event",confidence:.98,source:"structural",domain:"personal",slots:{kind:"pet_loss"}};
@@ -286,12 +309,12 @@
   function domainFor(intent){
     if(!intent)return "unknown";
     if(intent.startsWith("repair_"))return "repair";
-    if(intent.includes("memory")||intent.includes("pet")||intent.includes("first_user")||intent.includes("last_user")||intent.includes("color_preference")||intent==="ask_liked_idea")return "memory";
+    if(intent.includes("memory")||intent.includes("pet")||intent.includes("first_user")||intent.includes("last_user")||intent.includes("color_preference")||intent==="ask_liked_idea"||intent==="ask_personal_fact")return "memory";
     if(intent.includes("fact")||intent==="factual_query")return "knowledge";
     if(intent.includes("mission")||intent.includes("creation")||intent==="ask_another_idea")return "creation";
     if(["greeting","farewell","thanks","apology","request_company","offer_disclosure","reaction","ask_relationship","ask_shared_activity","ask_companion_preference"].includes(intent))return "social";
     if(intent.startsWith("ask_")||intent==="creator_purpose_statement")return "self";
-    if(intent==="preference_statement"||intent==="personal_event")return "personal";
+    if(intent==="preference_statement"||intent==="personal_fact_statement"||intent==="personal_event")return "personal";
     return "conversation";
   }
 
@@ -317,7 +340,7 @@
 
   function memoryPolicy(intent){
     if(!intent)return "none";
-    if(intent.startsWith("repair_")||["ask_first_user_message","ask_last_user_question","ask_pet_name","ask_pet_death_time","ask_user_color_preference","ask_liked_idea","ask_memory"].includes(intent))return "history";
+    if(intent.startsWith("repair_")||["ask_first_user_message","ask_last_user_question","ask_pet_name","ask_pet_death_time","ask_user_color_preference","ask_liked_idea","ask_personal_fact","ask_memory"].includes(intent))return "history";
     if(intent==="fact_verification"||intent==="factual_query")return "knowledge";
     return "none";
   }
@@ -327,7 +350,7 @@
       greeting:"greeting",farewell:"farewell",ask_state:"ask_state",ask_identity:"ask_identity",ask_kind:"ask_kind",ask_purpose:"ask_purpose",
       ask_memory:"ask_memory",ask_reason:"ask_why"
     };
-    const companionSet=new Set(["greeting","farewell","thanks","apology","offer_disclosure","ask_companion_preference","ask_personality","ask_relationship","request_company","ask_shared_activity","ask_user_color_preference"]);
+    const companionSet=new Set(["greeting","farewell","thanks","apology","offer_disclosure","ask_companion_preference","ask_personality","ask_relationship","request_company","ask_shared_activity","ask_user_color_preference","ask_personal_fact"]);
     const qualitySet=new Set(["reaction","repair_wrong_answer","repair_repeat_question","repair_topic_drift","ask_first_user_message","ask_last_user_question","ask_pet_name","ask_pet_death_time","ask_liked_idea","ask_mission_idea","ask_another_mission_idea","ask_another_idea","ask_changed_mind","creator_purpose_statement","ask_current_thought","ask_decision_process"]);
     const arbiterSet=new Set(["ask_self_state","ask_self_summary","ask_capabilities","ask_knowledge_summary","ask_desired_action","ask_creation_preference","ask_creation_method","ask_destination","destination_proposal","ask_context_reference","ask_opinion_about"]);
     const understandingSet=new Set(["ask_capabilities","ask_understanding","ask_concept_understanding","ask_self_concept","ask_internet_access","ask_reason","ask_current_thought"]);
@@ -431,5 +454,5 @@
 
   ensure(brain);
   window.NpcIntIntentRouter={version:VERSION,ensure,resolve,currentFor,routeFor,authoritative,embed,cosine,semanticPrototype,format,domainFor,syncQueryFrame,repairInput,usefulWords};
-  print("system","","intent router v1.2 cargado · subespacios hash + guardia de entradas cortas + continuidad de ideas");
+  print("system","","intent router v1.3 cargado · pronombres preservados + hechos personales genéricos + routing por sujeto");
 })();
