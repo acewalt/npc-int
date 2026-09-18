@@ -149,6 +149,7 @@
       case "farewell":return farewellAnswer(b);
       case "thanks":return b.relationshipModel?.stage==="cercano"?"Claro. Para eso estamos trabajando juntos.":"De nada. Seguimos.";
       case "apology":return "Todo bien. Lo tomo como una reparación de la conversación y seguimos desde aquí.";
+      case "offer_disclosure":return "Te escucho. Cuéntame lo que quieras contarme; no voy a asumir de qué se trata antes de que lo digas.";
       case "ask_companion_preference":return window.NpcIntPersonality?.preferenceAnswer?.(b)||personalityAnswer(b);
       case "ask_personality":return personalityAnswer(b);
       case "ask_relationship":return relationDescription(b);
@@ -210,9 +211,11 @@
       const neuralState=window.NpcIntQwenBrowser?.state;
       if(neuralState?.loading||neuralState?.generating)return null;
       const lastNeuralOutput=Number(window.NpcIntNeuralWeb?.state?.lastOutputWallMs||0);
-      if(lastNeuralOutput&&now-lastNeuralOutput<60000)return null;
+      if(lastNeuralOutput&&now-lastNeuralOutput<120000)return null;
       const lastUser=Number(this.conversationArbiter?.lastUserWallMs||0);
-      if(lastUser&&now-lastUser<60000)return null;
+      if(lastUser&&now-lastUser<150000)return null;
+      const lastHumanActivity=Number(this.lastHumanActivityWallMs||0);
+      if(lastHumanActivity&&now-lastHumanActivity<90000)return null;
 
       const candidate=window.NpcIntInitiative?.choose?.(this,{now})||null;
       if(candidate)return window.NpcIntInitiative.commit(this,candidate,now);
@@ -248,5 +251,5 @@
 
   ensure(brain);
   window.NpcIntCompanion={ensure,classify,socialReply,status,greetingAnswer,sharedActivity,memoryAnswer,colorPreferenceAnswer};
-  print("system","","companion engine v1.5 cargado · colores multivalor + preferencias deícticas + intención central");
+  print("system","","companion engine v1.6 cargado · iniciativa prudente + escucha explícita + intención central");
 })();
