@@ -59,6 +59,17 @@
     return `Me dijiste que te gustan los colores ${values.slice(0,-1).join(", ")} y ${last}.`;
   }
 
+  function personalFactAnswer(b,frame){
+    const category=String(frame.category||"").trim();
+    const qualifier=frame.qualifier||null;
+    if(!category)return "No identifico qué dato personal me estás preguntando.";
+    const item=window.NpcIntSocialMemory?.personalFact?.(b,category,qualifier);
+    const label=window.NpcIntSocialMemory?.displayCategory?.(category,item?.data?.categoryLabel)||category;
+    if(!item)return `No tengo registrado tu ${label}${qualifier==="favorite"?" favorito":""}.`;
+    if(qualifier==="favorite")return `Me dijiste que tu ${label} favorito es ${item.value}.`;
+    return `Me dijiste que tu ${label} es ${item.value}.`;
+  }
+
   function memoryAnswer(b){
     const p=window.NpcIntSocialMemory?.profile?.(b);if(!p)return "Todavía no tengo recuerdos sociales claros sobre ti.";
     const parts=[];
@@ -113,6 +124,12 @@
     let base;
     if(x.kind==="project")base=`Eso sí me da algo concreto para conocerte mejor: estás trabajando en «${clip(x.value,86)}». Si volvemos a ese tema, intentaré continuar desde ahí.`;
     else if(x.kind==="goal")base=`Vale, me quedo con ese objetivo: «${clip(x.value,86)}». Cuando vuelva a aparecer puedo relacionarlo con lo que ya hayamos avanzado.`;
+    else if(x.kind==="personal_fact"){
+      const label=window.NpcIntSocialMemory?.displayCategory?.(x.data?.category,x.data?.categoryLabel)||x.data?.category||"dato";
+      base=x.data?.qualifier==="favorite"
+        ?`Vale. Me quedo con que tu ${label} favorito es ${x.value}.`
+        :`Vale. Me quedo con que tu ${label} es ${x.value}.`;
+    }
     else if(["like","preference"].includes(x.kind))base=`Vale, entonces «${clip(x.value,86)}» es una preferencia tuya que puedo tener presente cuando venga al caso.`;
     else if(x.kind==="dislike")base=`Entiendo. Tendré presente que no te gusta «${clip(x.value,86)}» cuando sea relevante.`;
     else if(x.kind==="name")base=`Perfecto, ${x.value}. Te llamaré así.`;
@@ -156,6 +173,7 @@
       case "request_company":return companyAnswer(b);
       case "ask_shared_activity":return sharedActivity(b);
       case "ask_user_color_preference":return colorPreferenceAnswer(b);
+      case "ask_personal_fact":return personalFactAnswer(b,frame);
       case "ask_social_memory":return memoryAnswer(b);
       default:return disclosureResponse(b,added,lower)||maybeWeaveMemory(b,frame.raw,softenFallback(lower),frame.intent,added);
     }
@@ -236,7 +254,21 @@
       ensure(brain);
       if(sub==="save"){const x=window.NpcIntCompanionPersistence?.save?.(brain);print(x?.ok?"system":"error","COMPANION>",x?.ok?"estado social guardado localmente":x?.error||"no se pudo guardar");return;}
       if(sub==="load"){const x=window.NpcIntCompanionPersistence?.load?.(brain);print(x?.ok?"system":"error","COMPANION>",x?.ok?"estado social restaurado":x?.error||"no se pudo cargar");return;}
-      if(sub==="forget"){window.NpcIntCompanionPersistence?.clear?.(brain);brain.relationshipModel=null;brain.topicManager=null;brain.pendingThreads=null;brain.companionState=null;ensure(brain);print("system","COMPANION>","memoria social persistente borrada; la sesión cognitiva general no se ha eliminado");return;}
+      if(sub==="forget"){
+        window.NpcIntCompanionPersistence?.clear?.(brain);
+        window.NpcIntSocialMemory?.clear?.(brain);
+        brain.socialMemory=null;
+        brain.relationshipModel=null;
+        brain.topicManager=null;
+        brain.pendingThreads=null;
+        brain.companionPersonality=null;
+        brain.socialTiming=null;
+        brain.initiativeEngine=null;
+        brain.companionState=null;
+        ensure(brain);
+        print("system","COMPANION>","memoria social persistente y memoria social activa borradas; la sesión cognitiva general no se ha eliminado");
+        return;
+      }
       print("debug","COMPANION>",status(brain));return;
     }
     if(head==="/relationship"){print("debug","RELATIONSHIP>",window.NpcIntRelationship?.format?.(brain)||"—");return;}
@@ -250,6 +282,6 @@
   };
 
   ensure(brain);
-  window.NpcIntCompanion={ensure,classify,socialReply,status,greetingAnswer,sharedActivity,memoryAnswer,colorPreferenceAnswer};
-  print("system","","companion engine v1.6 cargado · iniciativa prudente + escucha explícita + intención central");
+  window.NpcIntCompanion={ensure,classify,socialReply,status,greetingAnswer,sharedActivity,memoryAnswer,colorPreferenceAnswer,personalFactAnswer};
+  print("system","","companion engine v1.7 cargado · hechos personales genéricos + forget real + intención central");
 })();
