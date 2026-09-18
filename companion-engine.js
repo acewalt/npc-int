@@ -50,8 +50,13 @@
 
   function colorPreferenceAnswer(b){
     const p=window.NpcIntSocialMemory?.profile?.(b);
-    const color=[...(p?.likes||[]),...(p?.preferences||[])].find(x=>x.slot==="color"&&x.active!==false);
-    return color?`Lo último que me dijiste sobre tu color es que te gusta «${color.value}».`:"No tengo una preferencia de color tuya registrada con suficiente claridad.";
+    const rows=[...(p?.likes||[]),...(p?.preferences||[])]
+      .filter(x=>["color_like","color_favorite"].includes(x.slot)&&x.active!==false);
+    const values=[...new Set(rows.map(x=>String(x.data?.color||x.value||"").replace(/^color\s+/i,"").trim()).filter(Boolean))];
+    if(!values.length)return "No tengo una preferencia de color tuya registrada con suficiente claridad.";
+    if(values.length===1)return `Me dijiste que te gusta el color ${values[0]}.`;
+    const last=values.at(-1);
+    return `Me dijiste que te gustan los colores ${values.slice(0,-1).join(", ")} y ${last}.`;
   }
 
   function memoryAnswer(b){
@@ -164,7 +169,10 @@
     ensure(this);text=String(text||"").trim();const frame=classify(text,this);const now=Date.now();
     window.NpcIntSocialTiming?.noteUser?.(this,now);
     window.NpcIntRelationship?.noteUser?.(this,text,{now});
-    const added=window.NpcIntSocialMemory?.noteTurn?.(this,text,{tone:this.pragmatics?.lastTone||"neutral"})||[];
+    const added=window.NpcIntSocialMemory?.noteTurn?.(this,text,{
+      tone:this.pragmatics?.lastTone||"neutral",
+      priorNpc:this.dialogue?.lastNpc||this.companionState?.lastReply||this.discourse?.previousNpc||""
+    })||[];
     window.NpcIntTopics?.noteTurn?.(this,text);
     window.NpcIntPending?.noteUser?.(this,text);
 
@@ -233,5 +241,5 @@
 
   ensure(brain);
   window.NpcIntCompanion={ensure,classify,socialReply,status,greetingAnswer,sharedActivity,memoryAnswer,colorPreferenceAnswer};
-  print("system","","companion engine v1.3 cargado · consume intención central + preferencias recientes + continuidad");
+  print("system","","companion engine v1.4 cargado · colores multivalor + referencias resueltas + intención central");
 })();
