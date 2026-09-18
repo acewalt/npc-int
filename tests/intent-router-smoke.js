@@ -26,7 +26,7 @@ assert.equal(intent("pero ya no estamos hablando de eso").intent,"repair_topic_d
 assert.equal(intent("qué fue lo primero que te dije").intent,"ask_first_user_message");
 assert.equal(intent("cómo se llamaba mi perro que tuve?").intent,"ask_pet_name");
 assert.equal(intent("cuándo murió mi mascota?").intent,"ask_pet_death_time");
-assert.equal(intent("mi color favorito es el negro").intent,"preference_statement");
+assert.equal(intent("mi color favorito es el negro").intent,"personal_fact_statement");
 assert.equal(intent("Los gatos son mamíferos").intent,"fact_statement");
 assert.equal(intent("¿Los gatos son mamíferos?").intent,"fact_verification");
 assert.equal(intent("que idea es la que me gusta?").intent,"ask_liked_idea");
