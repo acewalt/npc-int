@@ -218,8 +218,17 @@
     return `Soy ${name}. Mi propósito es ${purpose}. ${stateAnswer(b)} ${capabilitiesAnswer(b)}`;
   }
 
-  function desiredActionAnswer(b){
+  function desiredActionAnswer(b,frame={}){
     const d=decision(b),g=goalLabel(b),topic=substantiveTopic(b);
+    const when=ANorm(frame.when||"ahora");
+    if(when==="manana"){
+      if(topic)return `Mañana me gustaría retomar «${clip(topic,70)}» y hacer algo que produzca una consecuencia observable: probar una opción, ver qué cambia y usar ese resultado para decidir lo siguiente.`;
+      return "Mañana me gustaría explorar una situación nueva con un objetivo concreto y consecuencias que pueda observar. No puedo saber ahora qué evento existirá mañana, así que lo tomo como una intención, no como una acción ya decidida.";
+    }
+    if(when==="esta tarde"||when==="esta noche"||when==="hoy"){
+      const label=when==="hoy"?"hoy":when;
+      if(topic)return `${label.charAt(0).toUpperCase()+label.slice(1)} me gustaría seguir con «${clip(topic,70)}» y probar una decisión concreta en vez de quedarme solo hablando de posibilidades.`;
+    }
     const usable=new Set(["observe","investigate","explore","rest","eat","seek_food","move_away","defend","attack","set_boundary"]);
     if(d&&usable.has(d.id))return `Ahora mismo preferiría ${d.label}${topic?` respecto a «${clip(topic,70)}»`:""}. Esa opción encaja con mi objetivo actual${g?` de ${g}`:""}, pero todavía puedo cambiarla si aparece información nueva.`;
     return `Ahora mismo preferiría tener una situación concreta que pueda observar y sobre la que pueda decidir${g?`; mi foco actual es ${g}`:""}. Sin un evento real del entorno no quiero fingir una acción física solo para tener algo que decir.`;
@@ -279,7 +288,7 @@
       case "ask_self_summary":return selfSummary(b);
       case "ask_capabilities":return capabilitiesAnswer(b);
       case "ask_knowledge_summary":return knowledgeSummary(b);
-      case "ask_desired_action":return desiredActionAnswer(b);
+      case "ask_desired_action":return desiredActionAnswer(b,frame);
       case "ask_creation_preference":return creationPreference(b);
       case "ask_creation_method":return creationMethod(frame.target);
       case "ask_destination":return destinationAnswer(b);
@@ -358,5 +367,5 @@
 
   ensure(brain);
   window.NpcIntConversationArbiter={classify,classifyMany,stateAnswer,capabilitiesAnswer,knowledgeSummary,opinionAnswer};
-  print("system","","árbitro conversacional v1.3 cargado · consume intención central + turnos compuestos + metaturnos");
+  print("system","","árbitro conversacional v1.4 cargado · intención temporal + turnos compuestos + metaturnos");
 })();
