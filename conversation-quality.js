@@ -171,6 +171,14 @@
     return first?`Lo primero que me dijiste en esta sesión fue: «${clip(first,145)}».`:"No tengo disponible el primer mensaje de esta sesión.";
   }
 
+  function likedIdeaAnswer(b){
+    const p=window.NpcIntSocialMemory?.profile?.(b);
+    const idea=[...(p?.likes||[]),...(p?.preferences||[])]
+      .find(x=>x.active!==false&&x.data?.category==="idea");
+    if(!idea)return "No tengo registrada con suficiente claridad una idea concreta que hayas dicho que te gusta.";
+    return `La idea que dijiste que te gusta es «${idea.value}».`;
+  }
+
   function missionIdeaAnswer(){
     return "Crearía una misión llamada «La sala que cambia de reglas»: el jugador entra en un escenario con tres rutas y una regla oculta. Cada decisión modifica una parte del entorno, y yo actuaría como director de la misión: observaría lo que intenta hacer, introduciría consecuencias y adaptaría el siguiente reto sin cambiar las reglas arbitrariamente.";
   }
@@ -198,6 +206,7 @@
       case "ask_first_user_message":return firstUserAnswer(b,ctx);
       case "ask_pet_name":return petAnswer(b,"name");
       case "ask_pet_death_time":return petAnswer(b,"time");
+      case "ask_liked_idea":return likedIdeaAnswer(b);
       case "ask_mission_idea":return missionIdeaAnswer();
       case "creator_purpose_statement":return creatorPurposeAnswer(b,frame);
       case "ask_changed_mind":return changedMindAnswer(b);
@@ -325,10 +334,10 @@
   };
 
   window.NpcIntConversationQuality={
-    classify,frameFor,refine,isInternalFocus,lastUserQuestion,previousSubstantiveUser,changedMindAnswer,petAnswer,firstUserAnswer,missionIdeaAnswer,
+    classify,frameFor,refine,isInternalFocus,lastUserQuestion,previousSubstantiveUser,changedMindAnswer,petAnswer,firstUserAnswer,likedIdeaAnswer,missionIdeaAnswer,
     config:{knowledgeMatching:"native:knowledge.js"}
   };
 
   ensure(brain);
-  print("system","","calidad conversacional v1.5 cargada · consume intención central + memoria autobiográfica + reparaciones");
+  print("system","","calidad conversacional v1.6 cargada · referencias de ideas + memoria autobiográfica + reparaciones");
 })();
