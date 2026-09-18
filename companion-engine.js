@@ -14,22 +14,24 @@
   }
 
   function classify(text,b=null){
-    const n=norm(text);let intent=null;
+    const n=norm(text);let intent=null,m;
     const central=b?window.NpcIntIntentRouter?.currentFor?.(b,text):null;
     if(central&&window.NpcIntIntentRouter?.authoritative?.(central)){
       const routed=central.routes?.companion||null;
-      return {raw:text,canonical:n,intent:routed,centralIntent:central.intent,source:"intent-router"};
+      return {raw:text,canonical:n,intent:routed,centralIntent:central.intent,source:"intent-router",...(central.slots||{})};
     }
     if(/^(hola|buenas|hey|ey|que onda|que tal)(?: .*)?$/.test(n))intent="social_greeting";
     else if(/^(chao|chau|adios|nos vemos|hasta luego|me voy|hablamos luego)$/.test(n))intent="farewell";
     else if(/^(gracias|muchas gracias|te agradezco|gracias parce)(?: .*)?$/.test(n))intent="thanks";
     else if(/^(perdon|disculpa|lo siento)(?: .*)?$/.test(n))intent="apology";
-    else if(/\b(que te gusta|que cosas te gustan|que prefieres|cuales son tus gustos|que disfrutas)\b/.test(n))intent="ask_companion_preference";
+    else if(/^(?:que|cual)\s+(.{2,40}?)\s+te gusta(?:n)?(?: a ti)?$/.test(n) || /\b(que te gusta|que cosas te gustan|que prefieres|cuales son tus gustos|que disfrutas)\b/.test(n))intent="ask_companion_preference";
     else if(/^(como eres|como es tu personalidad|que personalidad tienes|describete|como te describirias)$/.test(n))intent="ask_personality";
     else if(/\b(te caigo bien|que piensas de mi|como va nuestra relacion|somos amigos|me consideras amigo|me conoces)\b/.test(n))intent="ask_relationship";
     else if(/\b(habla conmigo|acompaname|acompañame|quiero hablar contigo|quedate hablando|conversemos|charlemos|estoy aburrido)\b/.test(n))intent="request_company";
     else if(/^(que hacemos|que podemos hacer|hacemos algo|que hacemos juntos|que propones hacer|que se te ocurre hacer juntos)(?: .*)?$/.test(n))intent="ask_shared_activity";
     else if(/^(?:que|cuales?) colores? (?:me gusta|me gustan|prefiero)(?: a mi)?$/.test(n) || /^cual es mi color favorito$/.test(n) || /^(?:y )?cual otro color me gusta(?: a mi)?$/.test(n))intent="ask_user_color_preference";
+    else if((m=n.match(/^cual es mi\s+(.{2,48}?)\s+favorit[oa]$/))){intent="ask_personal_fact";return {raw:text,canonical:n,intent,category:m[1].trim(),qualifier:"favorite"};}
+    else if((m=n.match(/^cual es mi\s+(.{2,48})$/))){intent="ask_personal_fact";return {raw:text,canonical:n,intent,category:m[1].trim(),qualifier:"value"};}
     else if(/^(que recuerdas de mi|que sabes de mi|que conoces de mi|te acuerdas de mi)(?: .*)?$/.test(n))intent="ask_social_memory";
     return {raw:text,canonical:n,intent};
   }
@@ -48,15 +50,39 @@
     return `Como personaje soy curiosa y bastante observadora, pero también prudente: me gusta investigar antes de afirmar algo. Suelo preferir resolver problemas, probar ideas y cambiar de opinión cuando aparece evidencia nueva. No quiero llenar cada silencio; si no tengo nada útil que aportar, prefiero esperar.`;
   }
 
+  function companionPreferenceAnswer(b,frame={}){
+    const category=norm(frame.category||"");
+    if(category==="color")return "No tengo un color favorito propio definido. Puedo tener preferencias de comportamiento y de actividad, pero no voy a apropiarme de los colores que tú me hayas dicho que te gustan.";
+    return window.NpcIntPersonality?.preferenceAnswer?.(b)||personalityAnswer(b);
+  }
+
   function colorPreferenceAnswer(b){
     const p=window.NpcIntSocialMemory?.profile?.(b);
-    const rows=[...(p?.likes||[]),...(p?.preferences||[])]
-      .filter(x=>["color_like","color_favorite"].includes(x.slot)&&x.active!==false);
+    const rows=[...(p?.likes||[]),...(p?.preferences||[]),...(p?.personalFacts||[])]
+      .filter(x=>["color_like","color_favorite","personal:favorite:color"].includes(x.slot)&&x.active!==false);
     const values=[...new Set(rows.map(x=>String(x.data?.color||x.value||"").replace(/^color\s+/i,"").trim()).filter(Boolean))];
     if(!values.length)return "No tengo una preferencia de color tuya registrada con suficiente claridad.";
     if(values.length===1)return `Me dijiste que te gusta el color ${values[0]}.`;
     const last=values.at(-1);
     return `Me dijiste que te gustan los colores ${values.slice(0,-1).join(", ")} y ${last}.`;
+  }
+
+  function personalFactAnswer(b,frame){
+    const category=String(frame.category||"").trim();
+    const qualifier=frame.qualifier||null;
+    if(!category)return "No identifico qué dato personal me estás preguntando.";
+    let item=window.NpcIntSocialMemory?.personalFact?.(b,category,qualifier);
+    const profile=window.NpcIntSocialMemory?.profile?.(b);
+    if(!item&&norm(category)==="color"&&qualifier==="favorite"){
+      item=(profile?.preferences||[]).find(x=>x.slot==="color_favorite"&&x.active!==false)||null;
+    }
+    const label=window.NpcIntSocialMemory?.displayCategory?.(category,item?.data?.categoryLabel)||category;
+    if(!item)return `No tengo registrado tu ${label}${qualifier==="favorite"?" favorito":""}.`;
+    if(qualifier==="favorite"){
+      const adj=item.data?.favoriteForm||(/a$/.test(norm(label))?"favorita":"favorito");
+      return `Me dijiste que tu ${label} ${adj} es ${item.value.replace(/^color\s+/i,"")}.`;
+    }
+    return `Me dijiste que tu ${label} es ${item.value}.`;
   }
 
   function memoryAnswer(b){
@@ -113,6 +139,12 @@
     let base;
     if(x.kind==="project")base=`Eso sí me da algo concreto para conocerte mejor: estás trabajando en «${clip(x.value,86)}». Si volvemos a ese tema, intentaré continuar desde ahí.`;
     else if(x.kind==="goal")base=`Vale, me quedo con ese objetivo: «${clip(x.value,86)}». Cuando vuelva a aparecer puedo relacionarlo con lo que ya hayamos avanzado.`;
+    else if(x.kind==="personal_fact"){
+      const label=window.NpcIntSocialMemory?.displayCategory?.(x.data?.category,x.data?.categoryLabel)||x.data?.category||"dato";
+      base=x.data?.qualifier==="favorite"
+        ?`Vale. Me quedo con que tu ${label} favorito es ${x.value}.`
+        :`Vale. Me quedo con que tu ${label} es ${x.value}.`;
+    }
     else if(["like","preference"].includes(x.kind))base=`Vale, entonces «${clip(x.value,86)}» es una preferencia tuya que puedo tener presente cuando venga al caso.`;
     else if(x.kind==="dislike")base=`Entiendo. Tendré presente que no te gusta «${clip(x.value,86)}» cuando sea relevante.`;
     else if(x.kind==="name")base=`Perfecto, ${x.value}. Te llamaré así.`;
@@ -150,12 +182,13 @@
       case "thanks":return b.relationshipModel?.stage==="cercano"?"Claro. Para eso estamos trabajando juntos.":"De nada. Seguimos.";
       case "apology":return "Todo bien. Lo tomo como una reparación de la conversación y seguimos desde aquí.";
       case "offer_disclosure":return "Te escucho. Cuéntame lo que quieras contarme; no voy a asumir de qué se trata antes de que lo digas.";
-      case "ask_companion_preference":return window.NpcIntPersonality?.preferenceAnswer?.(b)||personalityAnswer(b);
+      case "ask_companion_preference":return companionPreferenceAnswer(b,frame);
       case "ask_personality":return personalityAnswer(b);
       case "ask_relationship":return relationDescription(b);
       case "request_company":return companyAnswer(b);
       case "ask_shared_activity":return sharedActivity(b);
       case "ask_user_color_preference":return colorPreferenceAnswer(b);
+      case "ask_personal_fact":return personalFactAnswer(b,frame);
       case "ask_social_memory":return memoryAnswer(b);
       default:return disclosureResponse(b,added,lower)||maybeWeaveMemory(b,frame.raw,softenFallback(lower),frame.intent,added);
     }
@@ -236,7 +269,21 @@
       ensure(brain);
       if(sub==="save"){const x=window.NpcIntCompanionPersistence?.save?.(brain);print(x?.ok?"system":"error","COMPANION>",x?.ok?"estado social guardado localmente":x?.error||"no se pudo guardar");return;}
       if(sub==="load"){const x=window.NpcIntCompanionPersistence?.load?.(brain);print(x?.ok?"system":"error","COMPANION>",x?.ok?"estado social restaurado":x?.error||"no se pudo cargar");return;}
-      if(sub==="forget"){window.NpcIntCompanionPersistence?.clear?.(brain);brain.relationshipModel=null;brain.topicManager=null;brain.pendingThreads=null;brain.companionState=null;ensure(brain);print("system","COMPANION>","memoria social persistente borrada; la sesión cognitiva general no se ha eliminado");return;}
+      if(sub==="forget"){
+        window.NpcIntCompanionPersistence?.clear?.(brain);
+        window.NpcIntSocialMemory?.clear?.(brain);
+        brain.socialMemory=null;
+        brain.relationshipModel=null;
+        brain.topicManager=null;
+        brain.pendingThreads=null;
+        brain.companionPersonality=null;
+        brain.socialTiming=null;
+        brain.initiativeEngine=null;
+        brain.companionState=null;
+        ensure(brain);
+        print("system","COMPANION>","memoria social persistente y memoria social activa borradas; la sesión cognitiva general no se ha eliminado");
+        return;
+      }
       print("debug","COMPANION>",status(brain));return;
     }
     if(head==="/relationship"){print("debug","RELATIONSHIP>",window.NpcIntRelationship?.format?.(brain)||"—");return;}
@@ -250,6 +297,6 @@
   };
 
   ensure(brain);
-  window.NpcIntCompanion={ensure,classify,socialReply,status,greetingAnswer,sharedActivity,memoryAnswer,colorPreferenceAnswer};
-  print("system","","companion engine v1.6 cargado · iniciativa prudente + escucha explícita + intención central");
+  window.NpcIntCompanion={ensure,classify,socialReply,status,greetingAnswer,sharedActivity,memoryAnswer,colorPreferenceAnswer,personalFactAnswer,companionPreferenceAnswer};
+  print("system","","companion engine v1.7 cargado · hechos personales genéricos + forget real + intención central");
 })();

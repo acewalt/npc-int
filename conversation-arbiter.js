@@ -184,6 +184,15 @@
   function goalLabel(b){return b.mind?.lastCycle?.goals?.[0]?.label || b.cognitiveState?.current?.goal?.label || null;}
   function decision(b){return b.mind?.lastCycle?.decision || b.cognitiveState?.current?.action || null;}
 
+  function displayableTopic(b){
+    const profile=window.NpcIntSocialMemory?.profile?.(b);
+    const explicit=profile?.projects?.[0]||profile?.goals?.[0];
+    if(explicit?.value)return explicit.value;
+    const active=window.NpcIntTopics?.active?.(b);
+    if(active?.label&&active.source&&active.source!=="user"&&!/^(paso del tiempo|estado interno|inactividad)$/i.test(active.label))return active.label;
+    return null;
+  }
+
   function stateAnswer(b){
     const mood=typeof b.moodLabel==="function"?ANorm(b.moodLabel()):"neutral";
     const fear=b.mind?.affect?.fear,energy=b.mind?.needs?.energy,curiosity=b.mind?.cognition?.curiosity;
@@ -219,7 +228,7 @@
   }
 
   function desiredActionAnswer(b,frame={}){
-    const d=decision(b),g=goalLabel(b),topic=substantiveTopic(b);
+    const d=decision(b),g=goalLabel(b),topic=displayableTopic(b);
     const when=ANorm(frame.when||"ahora");
     if(when==="manana"){
       if(topic)return `Mañana me gustaría retomar «${clip(topic,70)}» y hacer algo que produzca una consecuencia observable: probar una opción, ver qué cambia y usar ese resultado para decidir lo siguiente.`;
@@ -367,5 +376,5 @@
 
   ensure(brain);
   window.NpcIntConversationArbiter={classify,classifyMany,stateAnswer,capabilitiesAnswer,knowledgeSummary,opinionAnswer};
-  print("system","","árbitro conversacional v1.4 cargado · intención temporal + turnos compuestos + metaturnos");
+  print("system","","árbitro conversacional v1.5 cargado · tópicos mostrables separados de etiquetas internas + intención temporal");
 })();

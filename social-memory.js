@@ -12,8 +12,18 @@
   const COLOR_RE=/\b(rojo|azul|verde|amarillo|negro|blanco|morado|violeta|rosa|rosado|naranja|gris|cafe|marron)\b/g;
   const MULTI_SLOTS=new Set(["color_like"]);
   function colorsIn(value){return [...new Set([...norm(value).matchAll(COLOR_RE)].map(m=>m[1]))];}
+  const categoryNorm=s=>norm(s).replace(/\s+/g," ").trim();
+  const stripValue=s=>String(s||"").trim().replace(/^(?:el|la|los|las)\s+/i,"").replace(/[.!?]+$/g,"").trim();
+  function personalSlot(category,qualifier="value"){return `personal:${qualifier}:${categoryNorm(category)}`;}
+  function displayCategory(category,label=null){
+    const raw=String(label||category||"dato").trim();
+    const n=categoryNorm(raw);
+    const pretty={numero:"número",pelicula:"película",cancion:"canción",direccion:"dirección",ocupacion:"ocupación"};
+    return pretty[n]||raw;
+  }
   const stop=new Set(["que","como","para","pero","porque","esto","eso","una","uno","unos","unas","del","las","los","con","por","soy","estoy","quiero","gusta"]);
   const sensitive=/\b(religion|religioso|religiosa|catolico|cristiano|musulman|politic|partido|voto|gay|lesbiana|bisexual|sexualidad|diagnostico|enfermedad|trastorno|sindrome|medicamento|adiccion)\b/i;
+  const isSensitive=s=>sensitive.test(norm(s));
   const tokens=s=>norm(s).split(" ").filter(w=>w.length>2&&!stop.has(w));
 
   function ensure(b){
@@ -23,7 +33,8 @@
   }
 
   function keyOf(kind,value){return `${kind}:${norm(value)}`;}
-  function slotOf(kind,value){
+  function slotOf(kind,value,data=null){
+    if(kind==="personal_fact"&&data?.category)return personalSlot(data.category,data.qualifier||"value");
     if(!["like","preference"].includes(kind))return null;
     if(!colorsIn(value).length)return null;
     return kind==="like"?"color_like":"color_favorite";
@@ -37,11 +48,15 @@
   }
   function add(b,kind,value,meta={}){
     const s=ensure(b),clean=String(value||"").trim().replace(/[.!?]+$/g,"").trim();
-    if(!clean||clean.length<2||sensitive.test(clean))return null;
-    const key=keyOf(kind,clean),slot=slotOf(kind,clean),existing=s.items.find(x=>x.key===key);
+    if(!clean||(clean.length<2&&kind!=="personal_fact")||isSensitive(clean)||isSensitive(meta.data?.category||""))return null;
+    const slot=meta.slot||slotOf(kind,clean,meta.data);
+    const key=slot&&!MULTI_SLOTS.has(slot)?`${kind}:${slot}`:keyOf(kind,clean);
+    const existing=s.items.find(x=>x.key===key);
     if(existing){
       deactivateSlot(s,slot,key);
-      existing.active=true;existing.slot=slot||existing.slot||null;if(meta.data)existing.data={...(existing.data||{}),...meta.data};
+      existing.active=true;existing.slot=slot||existing.slot||null;
+      if(meta.data)existing.data={...(existing.data||{}),...meta.data};
+      existing.value=clean;
       existing.mentions++;existing.lastMentionedTime=b.time||0;existing.lastMentionedWallMs=Date.now();existing.importance=Math.min(1,Math.max(existing.importance,meta.importance??.55)+.025);existing.confidence=Math.max(existing.confidence,meta.confidence??.82);return existing;
     }
     deactivateSlot(s,slot);
@@ -53,7 +68,10 @@
 
   function extract(text){
     const raw=repairInput(String(text||"").trim()),n=norm(raw),out=[];
-    const push=(kind,value,importance=.6,tags=[],data=null)=>{if(value&&String(value).trim().length>1&&!sensitive.test(String(value)))out.push({kind,value:String(value).trim(),importance,tags,data});};
+    const push=(kind,value,importance=.6,tags=[],data=null)=>{
+      const clean=String(value||"").trim();
+      if(clean&&(clean.length>1||kind==="personal_fact")&&!isSensitive(clean)&&!isSensitive(data?.category||""))out.push({kind,value:clean,importance,tags,data});
+    };
     let m;
     if((m=raw.match(/(?:me llamo|mi nombre es)\s+([A-Za-zÁÉÍÓÚÜÑáéíóúüñ][\wÁÉÍÓÚÜÑáéíóúüñ-]{1,40})/i)))push("name",m[1],.95,["identity"]);
     const temporalDisclosure=/^cuando\b/.test(n)&&/\b(?:tenia|era|estaba|tuve|vivia)\b/.test(n);
@@ -75,12 +93,37 @@
       });
     }
 
-    const favoriteColors=/\b(?:mi )?color(?:es)? favorito(?:s)? (?:es|son)\b/.test(n)?colorsIn(n):[];
-    for(const color of favoriteColors)push("preference",`color ${color}`,.82,["preference","color"],{category:"color",color});
+    // Hechos personales genéricos: una categoría nueva no requiere código nuevo.
+    // Ej.: "mi número favorito es el 3", "mi comida favorita es la pizza", "mi trabajo es soldador".
+    let personalMatched=false;
+    if(!asksQuestion&&(m=raw.match(/\bmi\s+([A-Za-zÁÉÍÓÚÜÑáéíóúüñ][\wÁÉÍÓÚÜÑáéíóúüñ -]{0,48}?)\s+(favorit[oa]s?)\s+(?:es|son)\s+(.+)$/i))){
+      const category=m[1].trim(),favoriteForm=m[2].toLowerCase(),value=stripValue(m[3]);
+      if(!isSensitive(category)){
+        push("personal_fact",value,.84,["personal","favorite"],{category:categoryNorm(category),categoryLabel:category,qualifier:"favorite",favoriteForm});
+        personalMatched=true;
+      }
+    }
+    if(!asksQuestion&&!personalMatched&&(m=raw.match(/\bmi\s+([A-Za-zÁÉÍÓÚÜÑáéíóúüñ][\wÁÉÍÓÚÜÑáéíóúüñ -]{0,48}?)\s+(?:es|son)\s+(.+)$/i))){
+      const category=m[1].trim(),value=stripValue(m[2]);
+      if(!/\b(?:gusta|prefier|favorit)\b/i.test(category)&&!isSensitive(category)){
+        push("personal_fact",value,.78,["personal","fact"],{category:categoryNorm(category),categoryLabel:category,qualifier:"value"});
+        personalMatched=true;
+      }
+    }
 
-    const likesColors=/\bm+e gusta(?:n|ba|ban)?\b/.test(n)?colorsIn(n):[];
-    if(likesColors.length){
-      for(const color of likesColors)push("like",`color ${color}`,.72,["preference","color"],{category:"color",color});
+    const segmented=repairInput(raw).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+    const negativeColorSegment=(segmented.match(/\bno me gusta(?:n)?\s+([^,;.]+)/)||[])[1]||"";
+    const dislikedColors=colorsIn(negativeColorSegment);
+    const positiveSegments=[...segmented.matchAll(/(?:^|[,;.])?\s*(?:pero\s+)?(?:me gusta(?:n)?|me gusta es|solo me gusta|me gusta solo)\s+([^,;.]+)/g)].map(x=>x[1]);
+    let likedColors=[...new Set(positiveSegments.flatMap(colorsIn))].filter(color=>!dislikedColors.includes(color));
+    if(!likedColors.length&&/\bm+e gusta(?:n|ba|ban)?\b/.test(n)){
+      likedColors=colorsIn(n).filter(color=>!dislikedColors.includes(color));
+    }
+    const replaceColorSet=/\b(?:solo|solamente|unicamente|únicamente)\b/.test(n)||/\b(?:te dije|te repito|repito)\b/.test(n)&&likedColors.length>0;
+
+    if(likedColors.length){
+      for(const color of likedColors)push("like",`color ${color}`,.72,["preference","color"],{category:"color",color,replaceSet:replaceColorSet});
+      for(const color of dislikedColors)push("dislike",`color ${color}`,.74,["preference","color","negative"],{category:"color",color});
     }else if((m=raw.match(/\bno me gusta(?:n)?\s+(.{2,120})/i))){
       push("dislike",m[1],.66,["preference"]);
     }else if((m=raw.match(/\bm+e gusta(?:n|ba|ban)?\s+(.{2,120})/i))){
@@ -107,7 +150,27 @@
 
   function noteTurn(b,text,meta={}){
     const s=ensure(b),items=extract(text).map(x=>resolveDeicticPreference(x,meta)),added=[];
-    for(const x of items){const item=add(b,x.kind,x.value,{importance:x.importance,tags:x.tags,data:x.data||null,tone:meta.tone||"neutral"});if(item)added.push(item);}
+    const positiveColors=items.filter(x=>x.kind==="like"&&x.data?.category==="color").map(x=>x.data.color);
+    const negativeColors=items.filter(x=>x.kind==="dislike"&&x.data?.category==="color").map(x=>x.data.color);
+    const replaceColors=items.some(x=>x.kind==="like"&&x.data?.category==="color"&&x.data?.replaceSet);
+    if(replaceColors){
+      for(const item of s.items){
+        const isColorSlot=item.slot==="color_like"||item.slot==="color_favorite"||item.slot==="personal:favorite:color";
+        const color=item.data?.color||colorsIn(item.value)[0]||norm(item.value);
+        if(isColorSlot&&item.active!==false&&!positiveColors.includes(color))item.active=false;
+      }
+    }
+    if(negativeColors.length){
+      for(const item of s.items){
+        const color=item.data?.color||colorsIn(item.value)[0]||norm(item.value);
+        const isColorSlot=item.slot==="color_like"||item.slot==="color_favorite"||item.slot==="personal:favorite:color";
+        if(isColorSlot&&item.active!==false&&negativeColors.includes(color))item.active=false;
+      }
+    }
+    for(const x of items){
+      const item=add(b,x.kind,x.value,{importance:x.importance,tags:x.tags,data:x.data||null,slot:x.slot||null,tone:meta.tone||"neutral"});
+      if(item)added.push(item);
+    }
     s.lastExtracted=added.map(x=>x.id);
     return added;
   }
@@ -128,7 +191,7 @@
 
   function profile(b){
     const s=ensure(b),best=kind=>s.items.filter(x=>x.kind===kind&&x.active!==false).sort((a,c)=>(c.lastMentionedWallMs||0)-(a.lastMentionedWallMs||0)||(c.importance+c.mentions*.03)-(a.importance+a.mentions*.03)).slice(0,5);
-    return {name:best("name")[0]?.value||b.relation?.name||"Jugador",likes:best("like"),dislikes:best("dislike"),preferences:best("preference"),projects:best("project"),goals:best("goal"),updates:best("shared-update"),pets:best("pet")};
+    return {name:best("name")[0]?.value||b.relation?.name||"Jugador",likes:best("like"),dislikes:best("dislike"),preferences:best("preference"),personalFacts:best("personal_fact"),projects:best("project"),goals:best("goal"),updates:best("shared-update"),pets:best("pet")};
   }
 
   function latestPet(b){
@@ -137,10 +200,17 @@
       .sort((a,c)=>(c.lastMentionedWallMs||c.wallMs||0)-(a.lastMentionedWallMs||a.wallMs||0))[0]||null;
   }
 
+  function personalFact(b,category,qualifier=null){
+    const cat=categoryNorm(category);
+    return ensure(b).items
+      .filter(x=>x.kind==="personal_fact"&&x.active!==false&&categoryNorm(x.data?.category||"")===cat&&(!qualifier||x.data?.qualifier===qualifier))
+      .sort((a,c)=>(c.lastMentionedWallMs||c.wallMs||0)-(a.lastMentionedWallMs||a.wallMs||0))[0]||null;
+  }
+
   function snapshot(b){return {version:1,seq:ensure(b).seq,items:ensure(b).items.map(x=>({...x}))};}
   function restore(b,data){
     const s=ensure(b);if(!data||!Array.isArray(data.items))return s;
-    s.items=data.items.filter(x=>x&&x.kind&&x.value&&!sensitive.test(String(x.value))).slice(-120).map(x=>({...x,slot:x.slot||slotOf(x.kind,x.value),active:x.active!==false}));
+    s.items=data.items.filter(x=>x&&x.kind&&x.value&&!isSensitive(String(x.value))&&!isSensitive(x.data?.category||"")).slice(-120).map(x=>({...x,slot:x.slot||slotOf(x.kind,x.value,x.data),active:x.active!==false}));
     const latestBySlot=new Map();
     for(const item of s.items){
       if(!item.slot||MULTI_SLOTS.has(item.slot))continue;
@@ -153,6 +223,6 @@
   function clear(b){const s=ensure(b);s.items=[];s.seq=1;s.lastExtracted=[];}
   function format(b){const p=profile(b),s=ensure(b);const rows=s.items.slice(-12).map(x=>`#${x.id} [${x.kind}] ${x.value} · imp=${x.importance.toFixed(2)} · menciones=${x.mentions}`);return [`persona=${p.name}`,`recuerdos sociales=${s.items.length}`,...rows].join("\n");}
 
-  window.NpcIntSocialMemory={ensure,add,extract,noteTurn,recall,profile,snapshot,restore,clear,format,slotOf,latestPet,colorsIn,repairInput};
-  print("system","","memoria social v1.5 cargada · colores multivalor + referencias de idea + memoria autobiográfica tolerante");
+  window.NpcIntSocialMemory={ensure,add,extract,noteTurn,recall,profile,snapshot,restore,clear,format,slotOf,latestPet,personalFact,personalSlot,displayCategory,colorsIn,repairInput};
+  print("system","","memoria social v1.6 cargada · hechos personales genéricos + correcciones de preferencias + memoria autobiográfica");
 })();

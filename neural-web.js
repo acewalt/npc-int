@@ -195,6 +195,8 @@
       intent==="ask_pet_name"||
       intent==="ask_pet_death_time"||
       intent==="ask_user_color_preference"||
+      intent==="ask_personal_fact"||
+      intent==="ask_companion_preference"||
       intent==="ask_liked_idea"||
       intent==="ask_mission_idea"||
       intent==="ask_another_mission_idea"||
@@ -651,5 +653,5 @@
   updateQwenButton();
 
   window.NpcIntNeuralWeb={state,health,loadQwen,activateQwen,updateQwenButton,generate,browserMessages,contextFor,compactCompanion,prepareSymbolicDraft,recordNeuralTurn,turnMode,neuralQuality};
-  print("system","","capa neuronal web v1.3 cargada · follow-ups simbólicos protegidos + filtro de idioma + prompt mínimo");
+  print("system","","capa neuronal web v1.4 cargada · sujeto personal protegido + hechos genéricos + filtro de idioma");
 })();
