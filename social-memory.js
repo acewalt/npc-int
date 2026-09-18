@@ -1,7 +1,17 @@
 "use strict";
 
 (function(){
-  const norm=s=>String(s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9ñ ]+/g," ").replace(/\s+/g," ").trim();
+  function repairInput(s){
+    return String(s||"")
+      .replace(/\bmme\b/gi,"me")
+      .replace(/\bmcuando\b/gi,"cuando")
+      .replace(/\bquequ[eé]\b/gi,"qué")
+      .replace(/\bquemuri[oó]\b/gi,"que murió");
+  }
+  const norm=s=>repairInput(s).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9ñ ]+/g," ").replace(/\s+/g," ").trim();
+  const COLOR_RE=/\b(rojo|azul|verde|amarillo|negro|blanco|morado|violeta|rosa|rosado|naranja|gris|cafe|marron)\b/g;
+  const MULTI_SLOTS=new Set(["color_like"]);
+  function colorsIn(value){return [...new Set([...norm(value).matchAll(COLOR_RE)].map(m=>m[1]))];}
   const stop=new Set(["que","como","para","pero","porque","esto","eso","una","uno","unos","unas","del","las","los","con","por","soy","estoy","quiero","gusta"]);
   const sensitive=/\b(religion|religioso|religiosa|catolico|cristiano|musulman|politic|partido|voto|gay|lesbiana|bisexual|sexualidad|diagnostico|enfermedad|trastorno|sindrome|medicamento|adiccion)\b/i;
   const tokens=s=>norm(s).split(" ").filter(w=>w.length>2&&!stop.has(w));
@@ -15,14 +25,14 @@
   function keyOf(kind,value){return `${kind}:${norm(value)}`;}
   function slotOf(kind,value){
     if(!["like","preference"].includes(kind))return null;
-    const n=norm(value);
-    if(/\b(?:color )?(?:rojo|azul|verde|amarillo|negro|blanco|morado|violeta|rosa|rosado|naranja|gris|cafe|marron)\b/.test(n))return "color";
-    return null;
+    if(!colorsIn(value).length)return null;
+    return kind==="like"?"color_like":"color_favorite";
   }
   function deactivateSlot(s,slot,exceptKey=null){
-    if(!slot)return;
+    if(!slot||MULTI_SLOTS.has(slot))return;
     for(const item of s.items){
-      const itemSlot=item.slot||slotOf(item.kind,item.value);if(itemSlot===slot&&item.key!==exceptKey&&item.active!==false){item.slot=itemSlot;item.active=false;}
+      const itemSlot=item.slot||slotOf(item.kind,item.value);
+      if(itemSlot===slot&&item.key!==exceptKey&&item.active!==false){item.slot=itemSlot;item.active=false;}
     }
   }
   function add(b,kind,value,meta={}){
@@ -42,11 +52,11 @@
   }
 
   function extract(text){
-    const raw=String(text||"").trim(),n=norm(raw),out=[];
+    const raw=repairInput(String(text||"").trim()),n=norm(raw),out=[];
     const push=(kind,value,importance=.6,tags=[],data=null)=>{if(value&&String(value).trim().length>1&&!sensitive.test(String(value)))out.push({kind,value:String(value).trim(),importance,tags,data});};
     let m;
     if((m=raw.match(/(?:me llamo|mi nombre es)\s+([A-Za-zÁÉÍÓÚÜÑáéíóúüñ][\wÁÉÍÓÚÜÑáéíóúüñ-]{1,40})/i)))push("name",m[1],.95,["identity"]);
-    const asksQuestion=/[?¿]/.test(raw)||/^(?:como|donde|que|cual|quien|por que|porque)\b/.test(n)||/^cuando (?!tenia\b|era\b|estaba\b)/.test(n);
+    const asksQuestion=/[?¿]/.test(raw)||/^(?:como|donde|que|cual|quien|por que|porque|a que edad|y a que edad|en que edad)\b/.test(n)||/^cuando (?!tenia\b|era\b|estaba\b)/.test(n);
     if(!asksQuestion&&/\b(?:murio|fallecio|se murio)\b/.test(n)&&/\b(?:perro|perra|gato|gata|mascota)\b/.test(n)){
       const species=(n.match(/\b(perro|perra|gato|gata|mascota)\b/)||[])[1]||"mascota";
       const nameMatch=raw.match(/\b(?:llamad[oa]|se llamaba|de nombre)\s+([A-Za-zÁÉÍÓÚÜÑáéíóúüñ][\wÁÉÍÓÚÜÑáéíóúüñ-]{1,40})/i);
@@ -64,10 +74,18 @@
       });
     }
 
-    if((m=raw.match(/\bmi color favorito es\s+(?:el |la )?([A-Za-zÁÉÍÓÚÜÑáéíóúüñ-]{2,30})/i)))push("preference",`color ${m[1]}`,.82,["preference","color"]);
-    if((m=raw.match(/\bno me gusta(?:n)?\s+(.{2,120})/i)))push("dislike",m[1],.66,["preference"]);
-    else if((m=raw.match(/\bme gusta(?:n)?\s+(.{2,120})/i)))push("like",m[1],.66,["preference"]);
-    if((m=raw.match(/\bprefiero\s+(.{2,120})/i)))push("preference",m[1],.70,["preference"]);
+    const favoriteColors=/\b(?:mi )?colores? favoritos? (?:es|son)\b/.test(n)?colorsIn(n):[];
+    for(const color of favoriteColors)push("preference",`color ${color}`,.82,["preference","color"],{category:"color",color});
+
+    const likesColors=/\bm+e gusta(?:n|ba|ban)?\b/.test(n)?colorsIn(n):[];
+    if(likesColors.length){
+      for(const color of likesColors)push("like",`color ${color}`,.72,["preference","color"],{category:"color",color});
+    }else if((m=raw.match(/\bno me gusta(?:n)?\s+(.{2,120})/i))){
+      push("dislike",m[1],.66,["preference"]);
+    }else if((m=raw.match(/\bm+e gusta(?:n|ba|ban)?\s+(.{2,120})/i))){
+      push("like",m[1],.66,["preference"]);
+    }
+    if((m=raw.match(/\bprefiero\s+(.{2,120})/i))&&!colorsIn(m[1]).length)push("preference",m[1],.70,["preference"]);
     if((m=raw.match(/\bestoy (?:haciendo|creando|trabajando en|desarrollando|armando)\s+(.{2,140})/i)))push("project",m[1],.82,["project","active"]);
     if((m=raw.match(/\bquiero (?:hacer|crear|aprender|probar|terminar)\s+(.{2,140})/i)))push("goal",m[1],.78,["goal"]);
     if((m=raw.match(/\b(?:hoy|ayer) (?:hice|termine|terminé|probe|probé|avance|avancé)\s+(.{2,140})/i)))push("shared-update",m[1],.72,["progress"]);
@@ -75,8 +93,19 @@
     return out;
   }
 
+  function resolveDeicticPreference(x,meta={}){
+    if(!x||x.kind!=="like")return x;
+    const n=norm(x.value);
+    if(!/^(?:esa|esta|la) idea$/.test(n)&&!/^esa mision$/.test(n))return x;
+    const prior=String(meta.priorNpc||"");
+    const quoted=[...prior.matchAll(/[«“"]([^»”"]{3,120})[»”"]/g)].map(m=>m[1].trim());
+    const label=quoted.at(-1);
+    if(!label)return x;
+    return {...x,value:label,data:{...(x.data||{}),category:"idea",reference:"previous_npc"}};
+  }
+
   function noteTurn(b,text,meta={}){
-    const s=ensure(b),items=extract(text),added=[];
+    const s=ensure(b),items=extract(text).map(x=>resolveDeicticPreference(x,meta)),added=[];
     for(const x of items){const item=add(b,x.kind,x.value,{importance:x.importance,tags:x.tags,data:x.data||null,tone:meta.tone||"neutral"});if(item)added.push(item);}
     s.lastExtracted=added.map(x=>x.id);
     return added;
@@ -113,16 +142,16 @@
     s.items=data.items.filter(x=>x&&x.kind&&x.value&&!sensitive.test(String(x.value))).slice(-120).map(x=>({...x,slot:x.slot||slotOf(x.kind,x.value),active:x.active!==false}));
     const latestBySlot=new Map();
     for(const item of s.items){
-      if(!item.slot)continue;
+      if(!item.slot||MULTI_SLOTS.has(item.slot))continue;
       const prev=latestBySlot.get(item.slot);
       if(!prev||(item.lastMentionedWallMs||item.wallMs||0)>(prev.lastMentionedWallMs||prev.wallMs||0))latestBySlot.set(item.slot,item);
     }
-    for(const item of s.items)if(item.slot&&latestBySlot.get(item.slot)!==item)item.active=false;
+    for(const item of s.items)if(item.slot&&!MULTI_SLOTS.has(item.slot)&&latestBySlot.get(item.slot)!==item)item.active=false;
     s.seq=Math.max(1,...s.items.map(x=>Number(x.id)||0))+1;return s;
   }
   function clear(b){const s=ensure(b);s.items=[];s.seq=1;s.lastExtracted=[];}
   function format(b){const p=profile(b),s=ensure(b);const rows=s.items.slice(-12).map(x=>`#${x.id} [${x.kind}] ${x.value} · imp=${x.importance.toFixed(2)} · menciones=${x.mentions}`);return [`persona=${p.name}`,`recuerdos sociales=${s.items.length}`,...rows].join("\n");}
 
-  window.NpcIntSocialMemory={ensure,add,extract,noteTurn,recall,profile,snapshot,restore,clear,format,slotOf,latestPet};
-  print("system","","memoria social v1.4 cargada · preferencias declarativas + tiempo autobiográfico flexible + mascotas");
+  window.NpcIntSocialMemory={ensure,add,extract,noteTurn,recall,profile,snapshot,restore,clear,format,slotOf,latestPet,colorsIn,repairInput};
+  print("system","","memoria social v1.5 cargada · colores multivalor + referencias de idea + memoria autobiográfica tolerante");
 })();
