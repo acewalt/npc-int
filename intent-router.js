@@ -224,7 +224,10 @@
     if(/^(?:dime|dame) (?:alguna )?otra idea$/.test(n) || /^otra idea$/.test(n))
       return {intent:"ask_another_idea",confidence:.99,source:"structural",domain:"creation"};
 
-    if(/^(?:vale )?(?:que|cual) mision (?:te gustaria|quisieras|quieres) crear$/.test(n)||/^(?:vale )?que mision se te ocurre(?: crear)?$/.test(n))
+    if(/^(?:vale )?(?:que|cual) mision (?:te gustaria|quisieras|quieres) crear$/.test(n) ||
+       /^(?:vale )?que mision se te ocurre(?: crear)?$/.test(n) ||
+       /^que clase de mision (?:crearias|harias)(?: tu)?$/.test(n) ||
+       /^que tipo de mision (?:crearias|harias)(?: tu)?$/.test(n))
       return {intent:"ask_mission_idea",confidence:.99,source:"structural",domain:"creation"};
 
     if(/^(?:alguna vez )?(?:cambiaste|has cambiado) de opinion(?: sobre algo)?$/.test(n) ||
