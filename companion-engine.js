@@ -102,7 +102,14 @@
   }
 
   function disclosureResponse(b,added,lower){
-    if(!added?.length)return null;const x=added[0],style=window.NpcIntPersonality?.style?.(b,{allowQuestion:true})||{};
+    if(!added?.length)return null;
+    const colorLikes=added.filter(x=>x.kind==="like"&&x.slot==="color_like"&&x.active!==false);
+    if(colorLikes.length){
+      const values=[...new Set(colorLikes.map(x=>String(x.data?.color||x.value||"").replace(/^color\s+/i,"").trim()).filter(Boolean))];
+      if(values.length>1)return `Vale. Me quedo con que te gustan los colores ${values.slice(0,-1).join(", ")} y ${values.at(-1)}.`;
+      if(values.length===1)return `Vale. Me quedo con que te gusta el color ${values[0]}.`;
+    }
+    const x=added[0],style=window.NpcIntPersonality?.style?.(b,{allowQuestion:true})||{};
     let base;
     if(x.kind==="project")base=`Eso sí me da algo concreto para conocerte mejor: estás trabajando en «${clip(x.value,86)}». Si volvemos a ese tema, intentaré continuar desde ahí.`;
     else if(x.kind==="goal")base=`Vale, me quedo con ese objetivo: «${clip(x.value,86)}». Cuando vuelva a aparecer puedo relacionarlo con lo que ya hayamos avanzado.`;
@@ -241,5 +248,5 @@
 
   ensure(brain);
   window.NpcIntCompanion={ensure,classify,socialReply,status,greetingAnswer,sharedActivity,memoryAnswer,colorPreferenceAnswer};
-  print("system","","companion engine v1.4 cargado · colores multivalor + referencias resueltas + intención central");
+  print("system","","companion engine v1.5 cargado · colores multivalor + preferencias deícticas + intención central");
 })();
