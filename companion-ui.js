@@ -24,6 +24,30 @@
     originalPrint("debug","MODULES>",technicalLog.map((x,i)=>`${i+1}. ${x.text}`).join("\n"));
   }
 
+  function bindForgetButton(){
+    const button=document.getElementById("companionForget");
+    if(!button||button.dataset.bound==="1")return;
+    button.dataset.bound="1";
+    button.addEventListener("click",()=>{
+      button.disabled=true;
+      try{
+        command("/companion forget");
+        button.dataset.state="done";
+        const label=button.querySelector(".companion-forget-label");
+        if(label)label.textContent="BORRADO";
+        window.setTimeout(()=>{
+          button.dataset.state="";
+          button.disabled=false;
+          if(label)label.textContent="FORGET";
+        },900);
+      }catch(err){
+        button.dataset.state="error";
+        button.disabled=false;
+        originalPrint("error","FORGET>",String(err?.message||err));
+      }
+    });
+  }
+
   const oldCommand=command;
   command=function(raw){
     const head=(String(raw||"").trim().split(/\s+/)[0]||"").toLowerCase();
@@ -49,5 +73,6 @@
     originalPrint("system","","/help para comandos · /modules para diagnóstico técnico");
   }
 
-  window.NpcIntCompanionUi={technicalLog,renderModules,get technicalVisible(){return technicalVisible;}};
+  bindForgetButton();
+  window.NpcIntCompanionUi={technicalLog,renderModules,bindForgetButton,get technicalVisible(){return technicalVisible;}};
 })();
