@@ -18,18 +18,20 @@
     const central=b?window.NpcIntIntentRouter?.currentFor?.(b,text):null;
     if(central&&window.NpcIntIntentRouter?.authoritative?.(central)){
       const routed=central.routes?.companion||null;
-      return {raw:text,canonical:n,intent:routed,centralIntent:central.intent,source:"intent-router"};
+      return {raw:text,canonical:n,intent:routed,centralIntent:central.intent,source:"intent-router",...(central.slots||{})};
     }
     if(/^(hola|buenas|hey|ey|que onda|que tal)(?: .*)?$/.test(n))intent="social_greeting";
     else if(/^(chao|chau|adios|nos vemos|hasta luego|me voy|hablamos luego)$/.test(n))intent="farewell";
     else if(/^(gracias|muchas gracias|te agradezco|gracias parce)(?: .*)?$/.test(n))intent="thanks";
     else if(/^(perdon|disculpa|lo siento)(?: .*)?$/.test(n))intent="apology";
-    else if(/\b(que te gusta|que cosas te gustan|que prefieres|cuales son tus gustos|que disfrutas)\b/.test(n))intent="ask_companion_preference";
+    else if(/^(?:que|cual)\s+(.{2,40}?)\s+te gusta(?:n)?(?: a ti)?$/.test(n) || /\b(que te gusta|que cosas te gustan|que prefieres|cuales son tus gustos|que disfrutas)\b/.test(n))intent="ask_companion_preference";
     else if(/^(como eres|como es tu personalidad|que personalidad tienes|describete|como te describirias)$/.test(n))intent="ask_personality";
     else if(/\b(te caigo bien|que piensas de mi|como va nuestra relacion|somos amigos|me consideras amigo|me conoces)\b/.test(n))intent="ask_relationship";
     else if(/\b(habla conmigo|acompaname|acompañame|quiero hablar contigo|quedate hablando|conversemos|charlemos|estoy aburrido)\b/.test(n))intent="request_company";
     else if(/^(que hacemos|que podemos hacer|hacemos algo|que hacemos juntos|que propones hacer|que se te ocurre hacer juntos)(?: .*)?$/.test(n))intent="ask_shared_activity";
     else if(/^(?:que|cuales?) colores? (?:me gusta|me gustan|prefiero)(?: a mi)?$/.test(n) || /^cual es mi color favorito$/.test(n) || /^(?:y )?cual otro color me gusta(?: a mi)?$/.test(n))intent="ask_user_color_preference";
+    else if((m=n.match(/^cual es mi\s+(.{2,48}?)\s+favorit[oa]$/))){intent="ask_personal_fact";return {raw:text,canonical:n,intent,category:m[1].trim(),qualifier:"favorite"};}
+    else if((m=n.match(/^cual es mi\s+(.{2,48})$/))){intent="ask_personal_fact";return {raw:text,canonical:n,intent,category:m[1].trim(),qualifier:"value"};}
     else if(/^(que recuerdas de mi|que sabes de mi|que conoces de mi|te acuerdas de mi)(?: .*)?$/.test(n))intent="ask_social_memory";
     return {raw:text,canonical:n,intent};
   }
@@ -46,6 +48,12 @@
   function personalityAnswer(b){
     const p=window.NpcIntPersonality?.ensure?.(b);
     return `Como personaje soy curiosa y bastante observadora, pero también prudente: me gusta investigar antes de afirmar algo. Suelo preferir resolver problemas, probar ideas y cambiar de opinión cuando aparece evidencia nueva. No quiero llenar cada silencio; si no tengo nada útil que aportar, prefiero esperar.`;
+  }
+
+  function companionPreferenceAnswer(b,frame={}){
+    const category=norm(frame.category||"");
+    if(category==="color")return "No tengo un color favorito propio definido. Puedo tener preferencias de comportamiento y de actividad, pero no voy a apropiarme de los colores que tú me hayas dicho que te gustan.";
+    return window.NpcIntPersonality?.preferenceAnswer?.(b)||personalityAnswer(b);
   }
 
   function colorPreferenceAnswer(b){
@@ -167,7 +175,7 @@
       case "thanks":return b.relationshipModel?.stage==="cercano"?"Claro. Para eso estamos trabajando juntos.":"De nada. Seguimos.";
       case "apology":return "Todo bien. Lo tomo como una reparación de la conversación y seguimos desde aquí.";
       case "offer_disclosure":return "Te escucho. Cuéntame lo que quieras contarme; no voy a asumir de qué se trata antes de que lo digas.";
-      case "ask_companion_preference":return window.NpcIntPersonality?.preferenceAnswer?.(b)||personalityAnswer(b);
+      case "ask_companion_preference":return companionPreferenceAnswer(b,frame);
       case "ask_personality":return personalityAnswer(b);
       case "ask_relationship":return relationDescription(b);
       case "request_company":return companyAnswer(b);
@@ -282,6 +290,6 @@
   };
 
   ensure(brain);
-  window.NpcIntCompanion={ensure,classify,socialReply,status,greetingAnswer,sharedActivity,memoryAnswer,colorPreferenceAnswer,personalFactAnswer};
+  window.NpcIntCompanion={ensure,classify,socialReply,status,greetingAnswer,sharedActivity,memoryAnswer,colorPreferenceAnswer,personalFactAnswer,companionPreferenceAnswer};
   print("system","","companion engine v1.7 cargado · hechos personales genéricos + forget real + intención central");
 })();
