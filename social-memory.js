@@ -148,13 +148,16 @@
     const replaceColors=items.some(x=>x.kind==="like"&&x.data?.category==="color"&&x.data?.replaceSet);
     if(replaceColors){
       for(const item of s.items){
-        if(item.slot==="color_like"&&item.active!==false&&!positiveColors.includes(item.data?.color||colorsIn(item.value)[0]))item.active=false;
+        const isColorSlot=item.slot==="color_like"||item.slot==="color_favorite"||item.slot==="personal:favorite:color";
+        const color=item.data?.color||colorsIn(item.value)[0]||norm(item.value);
+        if(isColorSlot&&item.active!==false&&!positiveColors.includes(color))item.active=false;
       }
     }
     if(negativeColors.length){
       for(const item of s.items){
-        const color=item.data?.color||colorsIn(item.value)[0];
-        if(item.slot==="color_like"&&item.active!==false&&negativeColors.includes(color))item.active=false;
+        const color=item.data?.color||colorsIn(item.value)[0]||norm(item.value);
+        const isColorSlot=item.slot==="color_like"||item.slot==="color_favorite"||item.slot==="personal:favorite:color";
+        if(isColorSlot&&item.active!==false&&negativeColors.includes(color))item.active=false;
       }
     }
     for(const x of items){
