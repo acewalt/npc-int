@@ -38,6 +38,14 @@ assert.equal(intent("y a que edad murio?").intent,"ask_pet_death_time");
 assert.equal(intent("que te gustaria hacer hoy?").intent,"ask_desired_action");
 assert.equal(intent("quequé color me gusta?").intent,"ask_user_color_preference");
 assert.equal(intent("mme gusta el color azul y negro").intent,"preference_statement");
+assert.equal(R.semanticPrototype("vale"),null,"una sola palabra nunca debe decidir intención por hashing");
+assert.equal(intent("vale").intent,"reaction");
+assert.equal(intent("dime otra idea").intent,"ask_another_idea");
+assert.equal(intent("dime alguna otra idea para otra mision").intent,"ask_another_mission_idea");
+assert.equal(intent("te quiero contar algo").intent,"offer_disclosure");
+const tomorrow=intent("qué te gustaría hacer mañana?");
+assert.equal(tomorrow.intent,"ask_desired_action");
+assert.equal(tomorrow.slots.when,"manana");
 
 const paraphrases=[
   ["me podrías recordar cuál era el nombre de mi mascota?","ask_pet_name"],
