@@ -74,7 +74,7 @@
       });
     }
 
-    const favoriteColors=/\b(?:mi )?colores? favoritos? (?:es|son)\b/.test(n)?colorsIn(n):[];
+    const favoriteColors=/\b(?:mi )?color(?:es)? favorito(?:s)? (?:es|son)\b/.test(n)?colorsIn(n):[];
     for(const color of favoriteColors)push("preference",`color ${color}`,.82,["preference","color"],{category:"color",color});
 
     const likesColors=/\bm+e gusta(?:n|ba|ban)?\b/.test(n)?colorsIn(n):[];
