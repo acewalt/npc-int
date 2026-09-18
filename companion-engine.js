@@ -29,7 +29,7 @@
     else if(/\b(te caigo bien|que piensas de mi|como va nuestra relacion|somos amigos|me consideras amigo|me conoces)\b/.test(n))intent="ask_relationship";
     else if(/\b(habla conmigo|acompaname|acompañame|quiero hablar contigo|quedate hablando|conversemos|charlemos|estoy aburrido)\b/.test(n))intent="request_company";
     else if(/^(que hacemos|que podemos hacer|hacemos algo|que hacemos juntos|que propones hacer|que se te ocurre hacer juntos)(?: .*)?$/.test(n))intent="ask_shared_activity";
-    else if(/^(?:que|cual) color (?:me gusta|prefiero)(?: a mi)?$/.test(n) || /^cual es mi color favorito$/.test(n))intent="ask_user_color_preference";
+    else if(/^(?:que|cuales?) colores? (?:me gusta|me gustan|prefiero)(?: a mi)?$/.test(n) || /^cual es mi color favorito$/.test(n) || /^(?:y )?cual otro color me gusta(?: a mi)?$/.test(n))intent="ask_user_color_preference";
     else if(/^(que recuerdas de mi|que sabes de mi|que conoces de mi|te acuerdas de mi)(?: .*)?$/.test(n))intent="ask_social_memory";
     return {raw:text,canonical:n,intent};
   }
@@ -50,8 +50,13 @@
 
   function colorPreferenceAnswer(b){
     const p=window.NpcIntSocialMemory?.profile?.(b);
-    const color=[...(p?.likes||[]),...(p?.preferences||[])].find(x=>x.slot==="color"&&x.active!==false);
-    return color?`Lo último que me dijiste sobre tu color es que te gusta «${color.value}».`:"No tengo una preferencia de color tuya registrada con suficiente claridad.";
+    const rows=[...(p?.likes||[]),...(p?.preferences||[])]
+      .filter(x=>["color_like","color_favorite"].includes(x.slot)&&x.active!==false);
+    const values=[...new Set(rows.map(x=>String(x.data?.color||x.value||"").replace(/^color\s+/i,"").trim()).filter(Boolean))];
+    if(!values.length)return "No tengo una preferencia de color tuya registrada con suficiente claridad.";
+    if(values.length===1)return `Me dijiste que te gusta el color ${values[0]}.`;
+    const last=values.at(-1);
+    return `Me dijiste que te gustan los colores ${values.slice(0,-1).join(", ")} y ${last}.`;
   }
 
   function memoryAnswer(b){
@@ -97,7 +102,14 @@
   }
 
   function disclosureResponse(b,added,lower){
-    if(!added?.length)return null;const x=added[0],style=window.NpcIntPersonality?.style?.(b,{allowQuestion:true})||{};
+    if(!added?.length)return null;
+    const colorLikes=added.filter(x=>x.kind==="like"&&x.slot==="color_like"&&x.active!==false);
+    if(colorLikes.length){
+      const values=[...new Set(colorLikes.map(x=>String(x.data?.color||x.value||"").replace(/^color\s+/i,"").trim()).filter(Boolean))];
+      if(values.length>1)return `Vale. Me quedo con que te gustan los colores ${values.slice(0,-1).join(", ")} y ${values.at(-1)}.`;
+      if(values.length===1)return `Vale. Me quedo con que te gusta el color ${values[0]}.`;
+    }
+    const x=added[0],style=window.NpcIntPersonality?.style?.(b,{allowQuestion:true})||{};
     let base;
     if(x.kind==="project")base=`Eso sí me da algo concreto para conocerte mejor: estás trabajando en «${clip(x.value,86)}». Si volvemos a ese tema, intentaré continuar desde ahí.`;
     else if(x.kind==="goal")base=`Vale, me quedo con ese objetivo: «${clip(x.value,86)}». Cuando vuelva a aparecer puedo relacionarlo con lo que ya hayamos avanzado.`;
@@ -164,7 +176,10 @@
     ensure(this);text=String(text||"").trim();const frame=classify(text,this);const now=Date.now();
     window.NpcIntSocialTiming?.noteUser?.(this,now);
     window.NpcIntRelationship?.noteUser?.(this,text,{now});
-    const added=window.NpcIntSocialMemory?.noteTurn?.(this,text,{tone:this.pragmatics?.lastTone||"neutral"})||[];
+    const added=window.NpcIntSocialMemory?.noteTurn?.(this,text,{
+      tone:this.pragmatics?.lastTone||"neutral",
+      priorNpc:this.dialogue?.lastNpc||this.companionState?.lastReply||this.discourse?.previousNpc||""
+    })||[];
     window.NpcIntTopics?.noteTurn?.(this,text);
     window.NpcIntPending?.noteUser?.(this,text);
 
@@ -233,5 +248,5 @@
 
   ensure(brain);
   window.NpcIntCompanion={ensure,classify,socialReply,status,greetingAnswer,sharedActivity,memoryAnswer,colorPreferenceAnswer};
-  print("system","","companion engine v1.3 cargado · consume intención central + preferencias recientes + continuidad");
+  print("system","","companion engine v1.5 cargado · colores multivalor + preferencias deícticas + intención central");
 })();

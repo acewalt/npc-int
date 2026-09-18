@@ -2,9 +2,16 @@
 
 (function(){
   const DIM=384;
-  const VERSION="1.0";
+  const VERSION="1.1";
 
-  const norm=s=>String(s||"").toLowerCase()
+  function repairInput(s){
+    return String(s||"")
+      .replace(/\bmme\b/gi,"me")
+      .replace(/\bmcuando\b/gi,"cuando")
+      .replace(/\bquequ[eé]\b/gi,"qué")
+      .replace(/\bquemuri[oó]\b/gi,"que murió");
+  }
+  const norm=s=>repairInput(s).toLowerCase()
     .normalize("NFD").replace(/[\u0300-\u036f]/g,"")
     .replace(/[^a-z0-9ñ ]+/g," ").replace(/\s+/g," ").trim();
 
@@ -75,10 +82,13 @@
       "cómo se llamaba mi perro","cómo se llama la mascota que tuve","recuerdas el nombre de mi perro","cuál era el nombre de mi mascota"
     ],
     ask_pet_death_time:[
-      "cuándo murió mi perro","cuándo se murió mi mascota","en qué momento falleció mi perro","qué edad tenía cuando murió mi mascota"
+      "cuándo murió mi perro","cuándo se murió mi mascota","en qué momento falleció mi perro","qué edad tenía cuando murió mi mascota","a qué edad murió","a qué edad tenía yo cuando murió mi perro"
     ],
     ask_user_color_preference:[
-      "qué color me gusta","cuál es mi color favorito","qué color prefiero","recuerdas mi color favorito"
+      "qué color me gusta","qué colores me gustan","cuál es mi color favorito","qué color prefiero","recuerdas mis colores","cuál otro color me gusta"
+    ],
+    ask_liked_idea:[
+      "qué idea es la que me gusta","cuál era la idea que me gustó","qué idea dije que me gustaba","recuerdas qué idea me gustó"
     ],
     ask_mission_idea:[
       "qué misión te gustaría crear","qué misión se te ocurre","inventa una misión","qué tipo de misión crearías"
@@ -123,13 +133,13 @@
   for(const [intent,examples] of Object.entries(PROTOTYPES))protoVectors[intent]=examples.map(embed);
 
   function isQuestion(raw,n){
-    return /[?¿]/.test(raw)||/^(que|como|cuando|donde|por que|porque|cual|cuales|quien|quienes|cuanto|cuanta|cuantos|cuantas|alguna vez)\b/.test(n);
+    return /[?¿]/.test(raw)||/^(que|como|cuando|donde|por que|porque|cual|cuales|quien|quienes|cuanto|cuanta|cuantos|cuantas|alguna vez|a que edad|y a que edad)\b/.test(n);
   }
 
   function personalSubject(subject){
     const n=norm(subject);
-    return /^(yo|me|mi|mis|nosotros|nosotras|tu|tus|usted|ustedes)\b/.test(n) ||
-      /\b(color favorito|preferencia|gusto|me gusta|mi nombre|mi perro|mi mascota)\b/.test(n);
+    return /^(yo|me|mi|mis|nosotros|nosotras|tu|tus|usted|ustedes|que|cual|cuales)\b/.test(n) ||
+      /\b(me|mi|mis|te|tu|tus|color favorito|preferencia|gusto|gusta|gustan|nombre|perro|mascota|idea)\b/.test(n);
   }
 
   function structural(text){
@@ -150,11 +160,22 @@
 
     if(/^(?:vale )?(?:como se llamaba|como se llama|cual era el nombre de) mi (?:perro|perra|gato|gata|mascota)(?: que tuve)?$/.test(n))
       return {intent:"ask_pet_name",confidence:.995,source:"structural",domain:"memory"};
-    if(/^(?:vale )?(?:cuando se murio|cuando murio|cuando fallecio|en que momento murio) mi (?:perro|perra|gato|gata|mascota)(?: que tuve)?$/.test(n))
+    if(/^(?:vale )?(?:cuando se murio|cuando murio|cuando fallecio|en que momento murio) mi (?:perro|perra|gato|gata|mascota)(?: que tuve)?$/.test(n) ||
+       /^(?:y )?a que edad (?:yo )?tenia cuando murio mi (?:perro|perra|gato|gata|mascota)$/.test(n) ||
+       /^(?:y )?a que edad murio(?: mi (?:perro|perra|gato|gata|mascota))?$/.test(n))
       return {intent:"ask_pet_death_time",confidence:.995,source:"structural",domain:"memory"};
 
-    if(/^(?:que|cual) color (?:me gusta|prefiero)(?: a mi)?$/.test(n)||/^cual es mi color favorito$/.test(n))
+    if(/^(?:que|cuales?) colores? (?:me gusta|me gustan|prefiero)(?: a mi)?$/.test(n) ||
+       /^cual es mi color favorito$/.test(n) ||
+       /^(?:y )?cual otro color me gusta(?: a mi)?$/.test(n))
       return {intent:"ask_user_color_preference",confidence:.995,source:"structural",domain:"memory"};
+
+    if(/^(?:que|cual) idea (?:es )?(?:la )?que me gusta$/.test(n) ||
+       /^(?:que|cual) idea dije que me gustaba$/.test(n))
+      return {intent:"ask_liked_idea",confidence:.995,source:"structural",domain:"memory"};
+
+    if(/^(?:y )?que te gustaria hacer(?: hoy| ahora)?$/.test(n) || /^(?:y )?que quisieras hacer(?: hoy| ahora)?$/.test(n))
+      return {intent:"ask_desired_action",confidence:.99,source:"structural",domain:"self"};
 
     if(/^(?:vale )?(?:que|cual) mision (?:te gustaria|quisieras|quieres) crear$/.test(n)||/^(?:vale )?que mision se te ocurre(?: crear)?$/.test(n))
       return {intent:"ask_mission_idea",confidence:.99,source:"structural",domain:"creation"};
@@ -167,14 +188,14 @@
 
     if(!question&&(m=n.match(/^(?:mi )?color favorito es (?:el |la )?(.+)$/)))
       return {intent:"preference_statement",confidence:.99,source:"structural",domain:"personal",slots:{category:"color",value:m[1]}};
-    if(!question&&(m=n.match(/^me gusta(?:n)? (.+)$/)))
+    if(!question&&(m=n.match(/^m+e gusta(?:n|ba|ban)? (.+)$/)))
       return {intent:"preference_statement",confidence:.98,source:"structural",domain:"personal",slots:{value:m[1]}};
 
     if(!question&&/\b(?:murio|fallecio|se murio)\b/.test(n)&&/\b(?:perro|perra|gato|gata|mascota)\b/.test(n))
       return {intent:"personal_event",confidence:.98,source:"structural",domain:"personal",slots:{kind:"pet_loss"}};
 
-    if((m=n.match(/^(.+?)\s+(?:es|son)\s+(.+)$/))&&question)
-      return {intent:"fact_verification",confidence:.97,source:"structural",domain:"knowledge",slots:{subject:m[1].trim(),object:m[2].trim()}};
+    if((m=n.match(/^(.+?)\s+(?:es|son)\s+(.+)$/))&&question&&!personalSubject(m[1])&&!personalSubject(m[2]))
+      return {intent:"fact_verification",confidence:.82,source:"structural",domain:"knowledge",slots:{subject:m[1].trim(),object:m[2].trim()}};
 
     if(question&&(m=n.match(/^que (?:es|son) (.+)$/)))
       return {intent:"factual_query",confidence:.96,source:"structural",domain:"knowledge",slots:{topic:m[1].trim(),question:"definition"}};
@@ -228,7 +249,7 @@
   function domainFor(intent){
     if(!intent)return "unknown";
     if(intent.startsWith("repair_"))return "repair";
-    if(intent.includes("memory")||intent.includes("pet")||intent.includes("first_user")||intent.includes("last_user")||intent.includes("color_preference"))return "memory";
+    if(intent.includes("memory")||intent.includes("pet")||intent.includes("first_user")||intent.includes("last_user")||intent.includes("color_preference")||intent==="ask_liked_idea")return "memory";
     if(intent.includes("fact")||intent==="factual_query")return "knowledge";
     if(intent.includes("mission")||intent.includes("creation"))return "creation";
     if(["greeting","farewell","thanks","apology","request_company","ask_relationship","ask_shared_activity","ask_companion_preference"].includes(intent))return "social";
@@ -259,7 +280,7 @@
 
   function memoryPolicy(intent){
     if(!intent)return "none";
-    if(intent.startsWith("repair_")||["ask_first_user_message","ask_last_user_question","ask_pet_name","ask_pet_death_time","ask_user_color_preference","ask_memory"].includes(intent))return "history";
+    if(intent.startsWith("repair_")||["ask_first_user_message","ask_last_user_question","ask_pet_name","ask_pet_death_time","ask_user_color_preference","ask_liked_idea","ask_memory"].includes(intent))return "history";
     if(intent==="fact_verification"||intent==="factual_query")return "knowledge";
     return "none";
   }
@@ -270,7 +291,7 @@
       ask_memory:"ask_memory",ask_reason:"ask_why"
     };
     const companionSet=new Set(["greeting","farewell","thanks","apology","ask_companion_preference","ask_personality","ask_relationship","request_company","ask_shared_activity","ask_user_color_preference"]);
-    const qualitySet=new Set(["repair_wrong_answer","repair_repeat_question","repair_topic_drift","ask_first_user_message","ask_last_user_question","ask_pet_name","ask_pet_death_time","ask_mission_idea","ask_changed_mind","creator_purpose_statement","ask_current_thought","ask_decision_process"]);
+    const qualitySet=new Set(["repair_wrong_answer","repair_repeat_question","repair_topic_drift","ask_first_user_message","ask_last_user_question","ask_pet_name","ask_pet_death_time","ask_liked_idea","ask_mission_idea","ask_changed_mind","creator_purpose_statement","ask_current_thought","ask_decision_process"]);
     const arbiterSet=new Set(["ask_self_state","ask_self_summary","ask_capabilities","ask_knowledge_summary","ask_desired_action","ask_creation_preference","ask_creation_method","ask_destination","destination_proposal","ask_context_reference","ask_opinion_about"]);
     const understandingSet=new Set(["ask_capabilities","ask_understanding","ask_concept_understanding","ask_self_concept","ask_internet_access","ask_reason","ask_current_thought"]);
     const refinementMap={personal_event:"express_grief"};
@@ -372,6 +393,6 @@
   };
 
   ensure(brain);
-  window.NpcIntIntentRouter={version:VERSION,ensure,resolve,currentFor,routeFor,authoritative,embed,cosine,format,domainFor,syncQueryFrame};
-  print("system","","intent router v1.0 cargado · fuente única de intención + embedding local + /intent");
+  window.NpcIntIntentRouter={version:VERSION,ensure,resolve,currentFor,routeFor,authoritative,embed,cosine,format,domainFor,syncQueryFrame,repairInput};
+  print("system","","intent router v1.1 cargado · intención personal protegida + paráfrasis/typos + embedding local + /intent");
 })();

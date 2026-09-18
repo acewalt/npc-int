@@ -73,17 +73,29 @@ r=b.hear("Habla conmigo");
 assert.match(r,/podemos hablar|conversar|hablemos/i);
 assert.doesNotMatch(r,/no me dejes|solo me tienes|me necesitas/i);
 
-// Una preferencia de color nueva reemplaza la anterior para esa categoría.
-r=b.hear("Me gusta el color rojo");
-assert.match(r,/color rojo/i);
-r=b.hear("Me gusta el color azul");
-assert.match(r,/color azul/i);
-r=b.hear("Que color me gusta");
+// Los gustos de color son multivalor: decir dos colores no elimina el primero.
+r=b.hear("Me gusta el color rojo y azul");
+assert.match(r,/rojo/i);
 assert.match(r,/azul/i);
-assert.doesNotMatch(r,/rojo/i);
-const activeColors=window.NpcIntSocialMemory.profile(b).likes.filter(x=>x.slot==="color");
-assert.strictEqual(activeColors.length,1);
-assert.match(activeColors[0].value,/azul/i);
+r=b.hear("Que colores me gustan");
+assert.match(r,/rojo/i);
+assert.match(r,/azul/i);
+const activeColors=window.NpcIntSocialMemory.profile(b).likes.filter(x=>x.slot==="color_like"&&x.active!==false);
+assert.strictEqual(activeColors.length,2);
+assert.ok(activeColors.some(x=>/rojo/i.test(x.value)));
+assert.ok(activeColors.some(x=>/azul/i.test(x.value)));
+
+// Typos reales y tiempo autobiográfico no deben crear recuerdos de mascota falsos.
+r=b.hear("mcuando niño tuve un perro llamado junior quemurio cuando tenía 8 años de edad");
+assert.match(r,/junior|8 años|lo siento/i);
+let pet=window.NpcIntSocialMemory.latestPet(b);
+assert.strictEqual(pet.data.name.toLowerCase(),"junior");
+assert.deepStrictEqual(pet.data.when,{type:"user_age",age:8});
+const petCount=b.socialMemory.items.filter(x=>x.kind==="pet").length;
+r=b.hear("a que edad yo tenia cuando murio mi perro");
+assert.strictEqual(b.socialMemory.items.filter(x=>x.kind==="pet").length,petCount,"una pregunta temporal no debe crear otra mascota incompleta");
+pet=window.NpcIntSocialMemory.latestPet(b);
+assert.strictEqual(pet.data.name.toLowerCase(),"junior");
 
 // La pérdida de una mascota se trata como duelo, no como entusiasmo.
 r=b.hear("ayer creo que mi perro murió");

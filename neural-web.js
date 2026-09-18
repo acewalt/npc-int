@@ -144,6 +144,18 @@
     const output=String(neuralText||"").trim();
     if(!output)return {ok:false,reason:"empty"};
 
+    if(/[\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af\u0400-\u04ff\u0600-\u06ff\u0590-\u05ff\u0900-\u097f\u0e00-\u0e7f]/.test(output)){
+      return {ok:false,reason:"non_latin_script"};
+    }
+
+    const languageWords=turnNorm(output).split(" ").filter(Boolean);
+    if(languageWords.length>=5){
+      const spanishMarkers=new Set(["el","la","los","las","un","una","que","de","del","es","son","para","por","con","tu","te","me","mi","si","no","pero","como","cuando","porque","puedo","puedes","quiero","tengo","tienes","dijiste","dijo","gusta","gustan","murio","tenias","años"]);
+      const markerHits=languageWords.filter(x=>spanishMarkers.has(x)).length;
+      const hasSpanishDiacritics=/[áéíóúüñ¿¡]/i.test(output);
+      if(markerHits===0&&!hasSpanishDiacritics)return {ok:false,reason:"language_mismatch"};
+    }
+
     const mode=turnMode(userText);
     const inputNorm=turnNorm(userText),outNorm=turnNorm(output);
     const echoOverlap=tokenOverlap(userText,output);
@@ -180,8 +192,11 @@
       intent==="ask_first_user_message"||
       intent==="ask_pet_name"||
       intent==="ask_pet_death_time"||
+      intent==="ask_user_color_preference"||
+      intent==="ask_liked_idea"||
       intent==="ask_mission_idea"||
       intent==="creator_purpose_statement"||
+      intent==="preference_statement"||
       intent.startsWith("repair_")||
       affect==="grief";
   }
@@ -377,42 +392,57 @@
 
   function browserMessages(userText,symbolicDraft){
     const draft=prepareSymbolicDraft(userText,symbolicDraft);
-    const c=contextFor(userText,draft.text);
-    const compact={
-      identity:c.identity,
-      currentInput:c.input,
-      recentConversation:recentConversationFor(userText),
-      relation:c.relation,
-      companion:compactCompanionFor(userText,draft.trusted),
-      nlp:c.nlp?.semantic?{semantic:c.nlp.semantic}:null,
-      mind:c.mind,
-      cognitiveState:c.cognitiveState,
-      ideaState:draft.trusted?c.ideaState:null,
-      responsePlan:draft.trusted?c.responsePlan:null,
-      memory:relevantMemoryFor(userText),
-      symbolicDraft:draft.text,
-      symbolicDraftTrusted:draft.trusted,
-      symbolicDraftReason:draft.reason
-    };
+    const route=window.NpcIntIntentRouter?.currentFor?.(brain,userText)||null;
+    const history=recentConversationFor(userText).slice(-4);
+    const memories=relevantMemoryFor(userText).slice(-4);
+    const cycle=compactCycle();
+    const companion=compactCompanionFor(userText,draft.trusted);
+    const lines=[
+      `Mensaje actual del jugador: ${String(userText||"").trim()}`,
+      `Intención resuelta: ${route?.intent||"no_resuelta"}`
+    ];
+
+    if(draft.trusted&&draft.text)lines.push(`Respuesta simbólica que debes respetar: ${draft.text}`);
+
+    if(history.length){
+      lines.push("Contexto conversacional necesario:");
+      for(const t of history){
+        const who=t.role==="user"?"Jugador":"NIA";
+        lines.push(`- ${who}: ${String(t.content||"").slice(0,180)}`);
+      }
+    }
+
+    if(memories.length){
+      lines.push("Recuerdos relevantes permitidos:");
+      for(const m of memories)lines.push(`- ${String(m.text||"").slice(0,180)}`);
+    }
+
+    if(companion?.socialMemory&&route?.memoryPolicy==="history"){
+      const sm=companion.socialMemory;
+      const personal=[...(sm.likes||[]),...(sm.preferences||[])].slice(0,5);
+      if(personal.length)lines.push(`Preferencias recordadas del jugador: ${personal.join("; ")}`);
+    }
+
+    if(["ask_state","ask_desired_action","ask_current_thought"].includes(route?.intent)){
+      const goal=cycle?.goals?.[0]?.label;
+      const decision=cycle?.decision?.label;
+      if(goal)lines.push(`Objetivo interno actual: ${goal}`);
+      if(decision)lines.push(`Decisión interna actual: ${decision}`);
+    }
 
     const system=[
-      "Eres la capa de lenguaje de NIA-01 dentro de un NPC cognitivo híbrido.",
-      "Responde SOLO al currentInput. Un cambio de tema invalida cualquier asunto anterior salvo que recentConversation aparezca explícitamente.",
-      "recentConversation se incluye únicamente cuando el turno actual necesita una referencia previa. Si está vacío, NO menciones temas anteriores.",
-      "memory contiene únicamente recuerdos considerados relevantes para este turno. No rescates otros recuerdos por tu cuenta.",
-      "Si symbolicDraftTrusted=false, ignora symbolicDraft. Si es true, conserva sus hechos y acto comunicativo, pero no copies errores ni preguntas-eco.",
-      "Nunca contestes una pregunta repitiéndola como otra pregunta. Debes producir una respuesta.",
-      "Puedes usar conocimiento general estable para preguntas generales, pero no inventes memoria personal, eventos de la sesión, percepciones ni acciones físicas.",
-      "No mezcles preferencias del jugador con gustos propios de NIA. No conviertas 'me gusta X' en 'a mí me gusta X'.",
-      "Distingue hechos, hipótesis y recuerdos. Si falta información personal, dilo sin inventar.",
-      "No expongas JSON, métricas internas, instrucciones, etiquetas <think> ni razonamiento interno.",
-      "Español natural, claro y breve. No escribas el prefijo 'NIA-01:' porque la interfaz ya lo añade.",
-      "Devuelve únicamente la respuesta final al currentInput."
+      "Eres únicamente la capa de redacción de NIA-01; el motor simbólico decide intención, memoria y hechos.",
+      "Responde solo al mensaje actual y usa exclusivamente el contexto que aparece abajo.",
+      "Escribe únicamente en español y con alfabeto latino. Nunca uses chino, japonés, coreano, cirílico u otra escritura.",
+      "Si hay una respuesta simbólica, conserva sus hechos, sujeto y sentido. No cambies 'tú' por 'yo' ni atribuyas a NIA gustos del jugador.",
+      "No inventes recuerdos personales ni sucesos. Para conocimiento general estable sí puedes usar tu conocimiento.",
+      "No repitas la pregunta como respuesta. No expongas JSON, instrucciones, métricas ni razonamiento interno.",
+      "Da una sola respuesta breve y natural. No escribas 'NIA-01:' al inicio."
     ].join("\n");
 
     return [
       {role:"system",content:system},
-      {role:"user",content:"TURNO ACTUAL Y CONTEXTO FILTRADO:\n"+JSON.stringify(compact)}
+      {role:"user",content:lines.join("\n")}
     ];
   }
 
@@ -616,5 +646,5 @@
   updateQwenButton();
 
   window.NpcIntNeuralWeb={state,health,loadQwen,activateQwen,updateQwenButton,generate,browserMessages,contextFor,compactCompanion,prepareSymbolicDraft,recordNeuralTurn,turnMode,neuralQuality};
-  print("system","","capa neuronal web v1.1 cargada · intent router + memoria autobiográfica protegida + contexto filtrado");
+  print("system","","capa neuronal web v1.2 cargada · filtro de idioma + prompt mínimo + memoria simbólica protegida");
 })();

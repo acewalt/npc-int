@@ -215,6 +215,25 @@ async function verifyCompleteBrowserOrder(){
   assert.strictEqual(vm.runInContext('brain.queryFrame.current.intent',browser),"fact_verification","QueryFrame debe usar la intención central y no reclasificarla");
   assert.strictEqual(vm.runInContext('NpcIntNeuralWeb.turnMode("que te gustaria crear una mision").needsHistory',browser),false,"un tema nuevo no debe heredar historial neural");
   assert.strictEqual(vm.runInContext('NpcIntNeuralWeb.turnMode("eso te habia preguntado?").needsHistory',browser),true,"una referencia explícita sí debe habilitar historial");
+
+  const badScript=JSON.parse(vm.runInContext('JSON.stringify(NpcIntNeuralWeb.neuralQuality("cuéntame algo","El perro me conecta que我喜欢.",""))',browser));
+  assert.strictEqual(badScript.ok,false,"Qwen no debe poder sacar escritura no latina al jugador");
+  assert.strictEqual(badScript.reason,"non_latin_script");
+  const badLanguage=JSON.parse(vm.runInContext('JSON.stringify(NpcIntNeuralWeb.neuralQuality("cuéntame algo","This response is entirely written in English without Spanish markers.",""))',browser));
+  assert.strictEqual(badLanguage.ok,false,"una salida larga claramente no española debe caer al simbólico");
+  assert.strictEqual(badLanguage.reason,"language_mismatch");
+  const goodSpanish=JSON.parse(vm.runInContext('JSON.stringify(NpcIntNeuralWeb.neuralQuality("los gatos son mamíferos?","Sí. Los gatos son mamíferos y tienen pelo.",""))',browser));
+  assert.strictEqual(goodSpanish.ok,true);
+
+  const compactMessages=JSON.parse(vm.runInContext('JSON.stringify(NpcIntNeuralWeb.browserMessages("los gatos son mamíferos?","Sí. Los gatos son mamíferos."))',browser));
+  assert.ok(compactMessages[1].content.includes("Mensaje actual del jugador:"),"el prompt Qwen debe ser texto natural compacto");
+  assert.ok(!compactMessages[1].content.includes('"cognitiveState"'),"el prompt Qwen no debe volcar el estado cognitivo JSON completo");
+  assert.ok(compactMessages[1].content.length<4000,"el contexto browser de Qwen debe permanecer pequeño para 0.6B");
+
+  await Promise.resolve(vm.runInContext('brain.hear("que te gustaria crear ?")',browser));
+  await Promise.resolve(vm.runInContext('brain.hear("me gusta esa idea")',browser));
+  const likedIdea=String(await Promise.resolve(vm.runInContext('brain.hear("que idea es la que me gusta ?")',browser)));
+  assert.match(likedIdea,/sala que cambia de reglas/i,"la referencia «esa idea» debe resolverse hacia la misión anterior");
   const beforeHear=fullPipeline.state.trace.length;
   await Promise.resolve(vm.runInContext('brain.hear("me interesa construir un juego en Unity")',browser));
   assert.strictEqual(fullPipeline.state.trace.length,beforeHear+1,"el hear final debe atravesar dispatch aunque wrappers posteriores lo envuelvan");
