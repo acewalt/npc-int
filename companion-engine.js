@@ -14,7 +14,7 @@
   }
 
   function classify(text,b=null){
-    const n=norm(text);let intent=null;
+    const n=norm(text);let intent=null,m;
     const central=b?window.NpcIntIntentRouter?.currentFor?.(b,text):null;
     if(central&&window.NpcIntIntentRouter?.authoritative?.(central)){
       const routed=central.routes?.companion||null;
@@ -58,8 +58,8 @@
 
   function colorPreferenceAnswer(b){
     const p=window.NpcIntSocialMemory?.profile?.(b);
-    const rows=[...(p?.likes||[]),...(p?.preferences||[])]
-      .filter(x=>["color_like","color_favorite"].includes(x.slot)&&x.active!==false);
+    const rows=[...(p?.likes||[]),...(p?.preferences||[]),...(p?.personalFacts||[])]
+      .filter(x=>["color_like","color_favorite","personal:favorite:color"].includes(x.slot)&&x.active!==false);
     const values=[...new Set(rows.map(x=>String(x.data?.color||x.value||"").replace(/^color\s+/i,"").trim()).filter(Boolean))];
     if(!values.length)return "No tengo una preferencia de color tuya registrada con suficiente claridad.";
     if(values.length===1)return `Me dijiste que te gusta el color ${values[0]}.`;
@@ -71,10 +71,17 @@
     const category=String(frame.category||"").trim();
     const qualifier=frame.qualifier||null;
     if(!category)return "No identifico qué dato personal me estás preguntando.";
-    const item=window.NpcIntSocialMemory?.personalFact?.(b,category,qualifier);
+    let item=window.NpcIntSocialMemory?.personalFact?.(b,category,qualifier);
+    const profile=window.NpcIntSocialMemory?.profile?.(b);
+    if(!item&&norm(category)==="color"&&qualifier==="favorite"){
+      item=(profile?.preferences||[]).find(x=>x.slot==="color_favorite"&&x.active!==false)||null;
+    }
     const label=window.NpcIntSocialMemory?.displayCategory?.(category,item?.data?.categoryLabel)||category;
     if(!item)return `No tengo registrado tu ${label}${qualifier==="favorite"?" favorito":""}.`;
-    if(qualifier==="favorite")return `Me dijiste que tu ${label} favorito es ${item.value}.`;
+    if(qualifier==="favorite"){
+      const adj=item.data?.favoriteForm||(/a$/.test(norm(label))?"favorita":"favorito");
+      return `Me dijiste que tu ${label} ${adj} es ${item.value.replace(/^color\s+/i,"")}.`;
+    }
     return `Me dijiste que tu ${label} es ${item.value}.`;
   }
 
