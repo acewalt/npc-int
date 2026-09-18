@@ -193,7 +193,6 @@
       return {intent:"ask_pet_death_time",confidence:.995,source:"structural",domain:"memory"};
 
     if(/^(?:que|cuales?) colores? (?:me gusta|me gustan|prefiero)(?: a mi)?$/.test(n) ||
-       /^cual es mi color favorito$/.test(n) ||
        /^(?:y )?cual otro color me gusta(?: a mi)?$/.test(n))
       return {intent:"ask_user_color_preference",confidence:.995,source:"structural",domain:"memory"};
 
