@@ -209,9 +209,11 @@ async function verifyCompleteBrowserOrder(){
 
   await Promise.resolve(vm.runInContext('brain.hear("mi color favorito es el negro")',browser));
   const preferenceRoute=JSON.parse(vm.runInContext('JSON.stringify(brain.intentRouter.current)',browser));
-  assert.strictEqual(preferenceRoute.intent,"preference_statement","la preferencia personal debe quedar fuera del almacén factual");
-  assert.strictEqual(vm.runInContext('brain.cognition.facts.some(f=>/color favorito/i.test(f.subject))',browser),false,"cognition no debe convertir una preferencia personal en hecho objetivo");
-  assert.strictEqual(vm.runInContext('NpcIntSocialMemory.profile(brain).preferences.some(x=>/color negro/i.test(x.value))',browser),true,"la preferencia debe conservarse en memoria social");
+  assert.strictEqual(preferenceRoute.intent,"personal_fact_statement","los favoritos deben usar memoria personal genérica, incluso para color");
+  assert.strictEqual(vm.runInContext('brain.cognition.facts.some(f=>/color favorito/i.test(f.subject))',browser),false,"cognition no debe convertir un favorito personal en hecho objetivo");
+  assert.strictEqual(vm.runInContext('NpcIntSocialMemory.personalFact(brain,"color","favorite").value',browser),"negro","el color favorito debe vivir en personal_fact");
+  const favoriteColor=String(await Promise.resolve(vm.runInContext('brain.hear("cual es mi color favorito?")',browser)));
+  assert.match(favoriteColor,/negro/i);
 
   await Promise.resolve(vm.runInContext('brain.hear("Los gatos son mamíferos")',browser));
   assert.strictEqual(vm.runInContext('brain.intentRouter.current.intent',browser),"fact_statement");
@@ -259,6 +261,30 @@ async function verifyCompleteBrowserOrder(){
   const tomorrowAction=String(await Promise.resolve(vm.runInContext('brain.hear("qué te gustaría hacer mañana?")',browser)));
   assert.match(tomorrowAction,/Mañana me gustaría/i,"la pregunta temporal debe llegar a ask_desired_action");
   assert.doesNotMatch(tomorrowAction,/Decido comparando/i,"preguntar qué quiere hacer mañana no debe responder con el proceso general de decisión");
+
+  const numberStored=String(await Promise.resolve(vm.runInContext('brain.hear("mi numero favorito es el 3")',browser)));
+  assert.match(numberStored,/número favorito|numero favorito/i,"una categoría arbitraria debe guardarse como hecho personal");
+  let numberAnswer=String(await Promise.resolve(vm.runInContext('brain.hear("cual es mi numero favorito?")',browser)));
+  assert.match(numberAnswer,/3/);
+  assert.doesNotMatch(numberAnswer,/color/i,"número favorito nunca debe caer sobre la memoria de color");
+  await Promise.resolve(vm.runInContext('brain.hear("mi numero favorito es el 2")',browser));
+  numberAnswer=String(await Promise.resolve(vm.runInContext('brain.hear("cual es mi numero favorito?")',browser)));
+  assert.match(numberAnswer,/2/);
+  assert.doesNotMatch(numberAnswer,/3/,"el slot personal genérico debe reemplazar el valor anterior de la misma categoría");
+
+  await Promise.resolve(vm.runInContext('brain.hear("me gustan el color negro y el blanco")',browser));
+  await Promise.resolve(vm.runInContext('brain.hear("te dije que no me gusta el negro, me gusta es el blanco")',browser));
+  const correctedColor=String(await Promise.resolve(vm.runInContext('brain.hear("que color me gusta?")',browser)));
+  assert.match(correctedColor,/blanco/i);
+  assert.doesNotMatch(correctedColor,/negro/i,"una corrección explícita debe retirar el color negado");
+
+  const niaColor=String(await Promise.resolve(vm.runInContext('brain.hear("que color te gusta a ti?")',browser)));
+  assert.match(niaColor,/No tengo un color favorito propio definido/i,"me/te debe distinguir gustos del jugador de preferencias de NIA");
+  assert.doesNotMatch(niaColor,/te gustan los colores/i);
+
+  vm.runInContext('brain.conversationArbiter.lastSubstantiveTopic="dije gusta negro gusta"; brain.pragmatics.meaningfulTopic="dije gusta negro gusta"; brain.dialogue.topic="dije gusta negro gusta";',browser);
+  const todayAction=String(await Promise.resolve(vm.runInContext('brain.hear("que te gustaria hacer hoy?")',browser)));
+  assert.doesNotMatch(todayAction,/dije gusta negro gusta/i,"una etiqueta interna de topicFrom nunca debe citarse al jugador");
   const beforeHear=fullPipeline.state.trace.length;
   await Promise.resolve(vm.runInContext('brain.hear("me interesa construir un juego en Unity")',browser));
   assert.strictEqual(fullPipeline.state.trace.length,beforeHear+1,"el hear final debe atravesar dispatch aunque wrappers posteriores lo envuelvan");
@@ -306,6 +332,11 @@ async function verifyCompleteBrowserOrder(){
   assert.strictEqual(terminal.children.length,beforeCommand+1,"/pipeline debe atravesar también la cadena completa de comandos");
   const nodeText=node=>String(node?.textContent||"")+(node?.children||[]).map(nodeText).join("");
   assert.match(nodeText(terminal.children.at(-1)),/pipeline=1\.1[\s\S]*mental-cycle:decide/);
+
+  await Promise.resolve(vm.runInContext('brain.hear("mi comida favorita es la pizza")',browser));
+  assert.ok(vm.runInContext("brain.socialMemory.items.length>0",browser));
+  vm.runInContext('command("/companion forget")',browser);
+  assert.strictEqual(vm.runInContext("brain.socialMemory.items.length",browser),0,"/companion forget debe vaciar también la memoria social activa");
 
   vm.runInContext("brain.reset()",browser);
   assert.strictEqual(vm.runInContext("!!brain.mind && !!brain.cognitiveState && !!brain.companionState",browser),true,"reset completo debe reconstruir los estados migrados y posteriores");
