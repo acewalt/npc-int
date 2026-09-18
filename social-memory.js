@@ -94,10 +94,8 @@
     let personalMatched=false;
     if(!asksQuestion&&(m=raw.match(/\bmi\s+([A-Za-zÁÉÍÓÚÜÑáéíóúüñ][\wÁÉÍÓÚÜÑáéíóúüñ -]{0,48}?)\s+favorit[oa]s?\s+(?:es|son)\s+(.+)$/i))){
       const category=m[1].trim(),value=stripValue(m[2]);
-      if(categoryNorm(category)!=="color"){
-        push("personal_fact",value,.84,["personal","favorite"],{category:categoryNorm(category),categoryLabel:category,qualifier:"favorite"});
-        personalMatched=true;
-      }
+      push("personal_fact",value,.84,["personal","favorite"],{category:categoryNorm(category),categoryLabel:category,qualifier:"favorite"});
+      personalMatched=true;
     }
     if(!asksQuestion&&!personalMatched&&(m=raw.match(/\bmi\s+([A-Za-zÁÉÍÓÚÜÑáéíóúüñ][\wÁÉÍÓÚÜÑáéíóúüñ -]{0,48}?)\s+(?:es|son)\s+(.+)$/i))){
       const category=m[1].trim(),value=stripValue(m[2]);
@@ -106,9 +104,6 @@
         personalMatched=true;
       }
     }
-
-    const favoriteColors=/\b(?:mi )?color(?:es)? favorito(?:s)? (?:es|son)\b/.test(n)?colorsIn(n):[];
-    for(const color of favoriteColors)push("preference",`color ${color}`,.82,["preference","color"],{category:"color",color});
 
     const negativeColorSegment=(n.match(/\bno me gusta(?:n)?\s+([^,;.]+)/)||[])[1]||"";
     const dislikedColors=colorsIn(negativeColorSegment);
