@@ -29,14 +29,41 @@
 .copy-chat-button[data-state="error"]{border-color:#7a363c;color:var(--red);background:#241013}
 .copy-chat-button[data-state="empty"]{color:var(--amber)}
 
+.companion-forget-button{
+  flex:0 0 auto;
+  height:28px;
+  padding:0 9px;
+  border:1px solid #6e343a;
+  border-radius:6px;
+  background:#190b0d;
+  color:#e89aa1;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  cursor:pointer;
+  font-size:10px;
+  line-height:1;
+  white-space:nowrap;
+  transition:background .15s,border-color .15s,color .15s,opacity .15s;
+}
+.companion-forget-button:hover:not(:disabled){background:#271013;border-color:#9b4850;color:var(--red)}
+.companion-forget-button:focus-visible{outline:1px solid var(--red);outline-offset:2px}
+.companion-forget-button:disabled{cursor:default;opacity:.75}
+.companion-forget-button[data-state="done"]{border-color:#3b8f59;background:#0f2b18;color:var(--green)}
+.companion-forget-button[data-state="error"]{border-color:#9b4850;background:#2a1014;color:var(--red)}
+
 @media(max-width:700px){
   .topbar-actions{gap:7px}
-  .copy-chat-button{height:26px;padding:0 7px;font-size:9px}
+  .copy-chat-button,.companion-forget-button{height:26px;padding:0 7px;font-size:9px}
 }
 
 @media(max-width:430px){
   .copy-chat-extra{display:none}
   .copy-chat-button{gap:4px;padding:0 6px}
+  .companion-forget-button{padding:0 5px}
+  .companion-forget-label{font-size:0}
+  .companion-forget-label::after{content:"CLR";font-size:9px}
+  .companion-forget-button[data-state="done"] .companion-forget-label::after{content:"OK"}
   .status{font-size:8.5px}
 }
 
