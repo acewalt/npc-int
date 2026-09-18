@@ -23,6 +23,7 @@
   }
   const stop=new Set(["que","como","para","pero","porque","esto","eso","una","uno","unos","unas","del","las","los","con","por","soy","estoy","quiero","gusta"]);
   const sensitive=/\b(religion|religioso|religiosa|catolico|cristiano|musulman|politic|partido|voto|gay|lesbiana|bisexual|sexualidad|diagnostico|enfermedad|trastorno|sindrome|medicamento|adiccion)\b/i;
+  const isSensitive=s=>sensitive.test(norm(s));
   const tokens=s=>norm(s).split(" ").filter(w=>w.length>2&&!stop.has(w));
 
   function ensure(b){
@@ -47,7 +48,7 @@
   }
   function add(b,kind,value,meta={}){
     const s=ensure(b),clean=String(value||"").trim().replace(/[.!?]+$/g,"").trim();
-    if(!clean||(clean.length<2&&kind!=="personal_fact")||sensitive.test(clean))return null;
+    if(!clean||(clean.length<2&&kind!=="personal_fact")||isSensitive(clean)||isSensitive(meta.data?.category||""))return null;
     const slot=meta.slot||slotOf(kind,clean,meta.data);
     const key=slot&&!MULTI_SLOTS.has(slot)?`${kind}:${slot}`:keyOf(kind,clean);
     const existing=s.items.find(x=>x.key===key);
@@ -69,7 +70,7 @@
     const raw=repairInput(String(text||"").trim()),n=norm(raw),out=[];
     const push=(kind,value,importance=.6,tags=[],data=null)=>{
       const clean=String(value||"").trim();
-      if(clean&&(clean.length>1||kind==="personal_fact")&&!sensitive.test(clean))out.push({kind,value:clean,importance,tags,data});
+      if(clean&&(clean.length>1||kind==="personal_fact")&&!isSensitive(clean)&&!isSensitive(data?.category||""))out.push({kind,value:clean,importance,tags,data});
     };
     let m;
     if((m=raw.match(/(?:me llamo|mi nombre es)\s+([A-Za-zÁÉÍÓÚÜÑáéíóúüñ][\wÁÉÍÓÚÜÑáéíóúüñ-]{1,40})/i)))push("name",m[1],.95,["identity"]);
@@ -97,7 +98,7 @@
     let personalMatched=false;
     if(!asksQuestion&&(m=raw.match(/\bmi\s+([A-Za-zÁÉÍÓÚÜÑáéíóúüñ][\wÁÉÍÓÚÜÑáéíóúüñ -]{0,48}?)\s+(favorit[oa]s?)\s+(?:es|son)\s+(.+)$/i))){
       const category=m[1].trim(),favoriteForm=m[2].toLowerCase(),value=stripValue(m[3]);
-      if(!sensitive.test(category)){
+      if(!isSensitive(category)){
         push("personal_fact",value,.84,["personal","favorite"],{category:categoryNorm(category),categoryLabel:category,qualifier:"favorite",favoriteForm});
         personalMatched=true;
       }
@@ -209,7 +210,7 @@
   function snapshot(b){return {version:1,seq:ensure(b).seq,items:ensure(b).items.map(x=>({...x}))};}
   function restore(b,data){
     const s=ensure(b);if(!data||!Array.isArray(data.items))return s;
-    s.items=data.items.filter(x=>x&&x.kind&&x.value&&!sensitive.test(String(x.value))).slice(-120).map(x=>({...x,slot:x.slot||slotOf(x.kind,x.value,x.data),active:x.active!==false}));
+    s.items=data.items.filter(x=>x&&x.kind&&x.value&&!isSensitive(String(x.value))&&!isSensitive(x.data?.category||"")).slice(-120).map(x=>({...x,slot:x.slot||slotOf(x.kind,x.value,x.data),active:x.active!==false}));
     const latestBySlot=new Map();
     for(const item of s.items){
       if(!item.slot||MULTI_SLOTS.has(item.slot))continue;
