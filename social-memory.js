@@ -47,7 +47,7 @@
   }
   function add(b,kind,value,meta={}){
     const s=ensure(b),clean=String(value||"").trim().replace(/[.!?]+$/g,"").trim();
-    if(!clean||clean.length<2||sensitive.test(clean))return null;
+    if(!clean||(clean.length<2&&kind!=="personal_fact")||sensitive.test(clean))return null;
     const slot=meta.slot||slotOf(kind,clean,meta.data);
     const key=slot&&!MULTI_SLOTS.has(slot)?`${kind}:${slot}`:keyOf(kind,clean);
     const existing=s.items.find(x=>x.key===key);
@@ -67,7 +67,10 @@
 
   function extract(text){
     const raw=repairInput(String(text||"").trim()),n=norm(raw),out=[];
-    const push=(kind,value,importance=.6,tags=[],data=null)=>{if(value&&String(value).trim().length>1&&!sensitive.test(String(value)))out.push({kind,value:String(value).trim(),importance,tags,data});};
+    const push=(kind,value,importance=.6,tags=[],data=null)=>{
+      const clean=String(value||"").trim();
+      if(clean&&(clean.length>1||kind==="personal_fact")&&!sensitive.test(clean))out.push({kind,value:clean,importance,tags,data});
+    };
     let m;
     if((m=raw.match(/(?:me llamo|mi nombre es)\s+([A-Za-zÁÉÍÓÚÜÑáéíóúüñ][\wÁÉÍÓÚÜÑáéíóúüñ-]{1,40})/i)))push("name",m[1],.95,["identity"]);
     const temporalDisclosure=/^cuando\b/.test(n)&&/\b(?:tenia|era|estaba|tuve|vivia)\b/.test(n);
