@@ -92,10 +92,12 @@
     // Hechos personales genéricos: una categoría nueva no requiere código nuevo.
     // Ej.: "mi número favorito es el 3", "mi comida favorita es la pizza", "mi trabajo es soldador".
     let personalMatched=false;
-    if(!asksQuestion&&(m=raw.match(/\bmi\s+([A-Za-zÁÉÍÓÚÜÑáéíóúüñ][\wÁÉÍÓÚÜÑáéíóúüñ -]{0,48}?)\s+favorit[oa]s?\s+(?:es|son)\s+(.+)$/i))){
-      const category=m[1].trim(),value=stripValue(m[2]);
-      push("personal_fact",value,.84,["personal","favorite"],{category:categoryNorm(category),categoryLabel:category,qualifier:"favorite"});
-      personalMatched=true;
+    if(!asksQuestion&&(m=raw.match(/\bmi\s+([A-Za-zÁÉÍÓÚÜÑáéíóúüñ][\wÁÉÍÓÚÜÑáéíóúüñ -]{0,48}?)\s+(favorit[oa]s?)\s+(?:es|son)\s+(.+)$/i))){
+      const category=m[1].trim(),favoriteForm=m[2].toLowerCase(),value=stripValue(m[3]);
+      if(!sensitive.test(category)){
+        push("personal_fact",value,.84,["personal","favorite"],{category:categoryNorm(category),categoryLabel:category,qualifier:"favorite",favoriteForm});
+        personalMatched=true;
+      }
     }
     if(!asksQuestion&&!personalMatched&&(m=raw.match(/\bmi\s+([A-Za-zÁÉÍÓÚÜÑáéíóúüñ][\wÁÉÍÓÚÜÑáéíóúüñ -]{0,48}?)\s+(?:es|son)\s+(.+)$/i))){
       const category=m[1].trim(),value=stripValue(m[2]);
