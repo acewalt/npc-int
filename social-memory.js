@@ -105,7 +105,7 @@
     }
     if(!asksQuestion&&!personalMatched&&(m=raw.match(/\bmi\s+([A-Za-zÁÉÍÓÚÜÑáéíóúüñ][\wÁÉÍÓÚÜÑáéíóúüñ -]{0,48}?)\s+(?:es|son)\s+(.+)$/i))){
       const category=m[1].trim(),value=stripValue(m[2]);
-      if(!/\b(?:gusta|prefier|favorit)\b/i.test(category)&&!sensitive.test(category)){
+      if(!/\b(?:gusta|prefier|favorit)\b/i.test(category)&&!isSensitive(category)){
         push("personal_fact",value,.78,["personal","fact"],{category:categoryNorm(category),categoryLabel:category,qualifier:"value"});
         personalMatched=true;
       }
