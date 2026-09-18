@@ -29,6 +29,15 @@ assert.equal(intent("cuándo murió mi mascota?").intent,"ask_pet_death_time");
 assert.equal(intent("mi color favorito es el negro").intent,"preference_statement");
 assert.equal(intent("Los gatos son mamíferos").intent,"fact_statement");
 assert.equal(intent("¿Los gatos son mamíferos?").intent,"fact_verification");
+assert.equal(intent("que idea es la que me gusta?").intent,"ask_liked_idea");
+assert.notEqual(intent("que idea es la que me gusta?").intent,"fact_verification");
+assert.equal(intent("que colores me gustan").intent,"ask_user_color_preference");
+assert.equal(intent("y cual otro color me gusta a mi?").intent,"ask_user_color_preference");
+assert.equal(intent("a que edad yo tenia cuando murio mi perro").intent,"ask_pet_death_time");
+assert.equal(intent("y a que edad murio?").intent,"ask_pet_death_time");
+assert.equal(intent("que te gustaria hacer hoy?").intent,"ask_desired_action");
+assert.equal(intent("quequé color me gusta?").intent,"ask_user_color_preference");
+assert.equal(intent("mme gusta el color azul y negro").intent,"preference_statement");
 
 const paraphrases=[
   ["me podrías recordar cuál era el nombre de mi mascota?","ask_pet_name"],
