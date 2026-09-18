@@ -29,7 +29,7 @@
     else if(/\b(te caigo bien|que piensas de mi|como va nuestra relacion|somos amigos|me consideras amigo|me conoces)\b/.test(n))intent="ask_relationship";
     else if(/\b(habla conmigo|acompaname|acompañame|quiero hablar contigo|quedate hablando|conversemos|charlemos|estoy aburrido)\b/.test(n))intent="request_company";
     else if(/^(que hacemos|que podemos hacer|hacemos algo|que hacemos juntos|que propones hacer|que se te ocurre hacer juntos)(?: .*)?$/.test(n))intent="ask_shared_activity";
-    else if(/^(?:que|cual) color (?:me gusta|prefiero)(?: a mi)?$/.test(n) || /^cual es mi color favorito$/.test(n))intent="ask_user_color_preference";
+    else if(/^(?:que|cuales?) colores? (?:me gusta|me gustan|prefiero)(?: a mi)?$/.test(n) || /^cual es mi color favorito$/.test(n) || /^(?:y )?cual otro color me gusta(?: a mi)?$/.test(n))intent="ask_user_color_preference";
     else if(/^(que recuerdas de mi|que sabes de mi|que conoces de mi|te acuerdas de mi)(?: .*)?$/.test(n))intent="ask_social_memory";
     return {raw:text,canonical:n,intent};
   }
