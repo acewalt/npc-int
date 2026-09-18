@@ -209,7 +209,9 @@
     if(/^(?:vale )?(?:que|cual) mision (?:te gustaria|quisieras|quieres) crear$/.test(n)||/^(?:vale )?que mision se te ocurre(?: crear)?$/.test(n))
       return {intent:"ask_mission_idea",confidence:.99,source:"structural",domain:"creation"};
 
-    if(/^(?:alguna vez )?(?:cambiaste|has cambiado) de opinion(?: sobre algo)?$/.test(n)||/^alguna vez has cambiado de parecer(?: sobre algo)?$/.test(n))
+    if(/^(?:alguna vez )?(?:cambiaste|has cambiado) de opinion(?: sobre algo)?$/.test(n) ||
+       /^alguna vez has cambiado de parecer(?: sobre algo)?$/.test(n) ||
+       /^(?:alguna vez )?(?:tuviste que |has tenido que )?(?:corregir|revisar|cambiar) (?:una )?opinion tuya$/.test(n))
       return {intent:"ask_changed_mind",confidence:.99,source:"structural",domain:"self"};
 
     if((m=n.match(/^te cree con (?:la )?finalidad de (.+)$/)))
