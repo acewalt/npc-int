@@ -264,6 +264,7 @@ async function verifyCompleteBrowserOrder(){
   const hearState=JSON.parse(vm.runInContext("JSON.stringify({input:brain.cognitiveState.current.input,perception:brain.mind.lastCycle.perception.type,idea:!!brain.ideaEngine.current,companion:!!brain.companionState})",browser));
   assert.deepStrictEqual(hearState,{input:"me interesa construir un juego en Unity",perception:"user",idea:true,companion:true},"las capas registradas y los wrappers posteriores deben ejecutar en la misma llamada");
 
+  vm.runInContext("brain.reset()",browser);
   const hostilityBefore=JSON.parse(vm.runInContext("JSON.stringify({relationTrust:brain.relation.trust,modelTrust:brain.relationshipModel.trust,comfort:brain.relationshipModel.comfort,tension:brain.relationshipModel.tension})",browser));
   const beforeHostility=fullPipeline.state.trace.length;
   await Promise.resolve(vm.runInContext('brain.hear("¡Eres una hpta!")',browser));
