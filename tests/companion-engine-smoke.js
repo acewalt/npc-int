@@ -147,8 +147,18 @@ window.NpcIntQwenBrowser.state.generating=true;
 assert.strictEqual(b.tick(2),null);
 window.NpcIntQwenBrowser.state.generating=false;
 
+// Incluso sin Qwen activo, 70 s de silencio todavía cuentan como conversación reciente.
+b.conversationArbiter={lastUserWallMs:Date.now()-70000};
+b.lastHumanActivityWallMs=Date.now()-70000;
+b.socialTiming.lastUserWallMs=Date.now()-70000;
+b.socialTiming.lastNpcWallMs=Date.now()-100000;
+b.socialTiming.lastInitiativeWallMs=Date.now()-300000;
+assert.strictEqual(b.tick(2),null,"NIA no debe interrumpir tras solo ~1 minuto de lectura/escritura");
+
 // Iniciativa: no debe hablar justo después del usuario, pero sí puede retomar
 // un pendiente cuando ha pasado suficiente tiempo real y el contenido tiene valor.
+b.conversationArbiter={lastUserWallMs:Date.now()-300000};
+b.lastHumanActivityWallMs=Date.now()-300000;
 b.socialTiming.lastUserWallMs=Date.now()-300000;
 b.socialTiming.lastNpcWallMs=Date.now()-300000;
 b.socialTiming.lastInitiativeWallMs=Date.now()-300000;

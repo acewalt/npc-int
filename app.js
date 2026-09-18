@@ -171,7 +171,12 @@ class NpcBrain{
 }
 
 const brain=new NpcBrain();
+brain.lastHumanActivityWallMs=Date.now();
 let autoTimer=null;
+
+function markHumanActivity(){
+  brain.lastHumanActivityWallMs=Date.now();
+}
 
 function setAuto(on){
   brain.auto=on;
@@ -180,8 +185,10 @@ function setAuto(on){
   autoTimer=null;
   if(on){
     autoTimer=setInterval(()=>{
-      const reply=brain.tick(2);
-      if(reply)print("npc",brain.identity.name+">",reply);
+      const result=brain.tick(2);
+      Promise.resolve(result).then(reply=>{
+        if(reply)print("initiative",brain.identity.name+" · iniciativa>",reply);
+      }).catch(err=>print("error","AUTO>",String(err?.message||err)));
     },4000);
   }
 }
@@ -244,6 +251,7 @@ function command(raw){
 function send(text){
   text=text.trim();
   if(!text)return;
+  markHumanActivity();
   if(text.startsWith("/")){command(text);return;}
   print("user",brain.relation.name+">",text);
   const reply=brain.hear(text);
@@ -265,6 +273,10 @@ $("chatForm").addEventListener("submit",e=>{
   input.focus();
 });
 
+input.addEventListener("input",markHumanActivity);
+input.addEventListener("keydown",markHumanActivity);
+input.addEventListener("focus",markHumanActivity);
+document.addEventListener("pointerdown",markHumanActivity,{passive:true});
 document.addEventListener("click",()=>input.focus());
 boot();
 setAuto(true);

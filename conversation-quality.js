@@ -9,7 +9,7 @@
 
   function ensure(b){
     if(b.conversationQuality)return b.conversationQuality;
-    b.conversationQuality={version:4,turns:0,variation:0,lastIntent:null,lastRepair:null,lastReply:null,lastUserInput:null,firstUserInput:null,userHistory:[]};
+    b.conversationQuality={version:5,turns:0,variation:0,lastIntent:null,lastRepair:null,lastReply:null,lastUserInput:null,firstUserInput:null,userHistory:[],missionHistory:[]};
     return b.conversationQuality;
   }
 
@@ -179,8 +179,53 @@
     return `La idea que dijiste que te gusta es «${idea.value}».`;
   }
 
-  function missionIdeaAnswer(){
-    return "Crearía una misión llamada «La sala que cambia de reglas»: el jugador entra en un escenario con tres rutas y una regla oculta. Cada decisión modifica una parte del entorno, y yo actuaría como director de la misión: observaría lo que intenta hacer, introduciría consecuencias y adaptaría el siguiente reto sin cambiar las reglas arbitrariamente.";
+  const MISSION_BANK=[
+    {
+      id:"changing-room",
+      title:"La sala que cambia de reglas",
+      text:"el jugador entra en un escenario con tres rutas y una regla oculta. Cada decisión modifica una parte del entorno, y yo actuaría como director de la misión: observaría lo que intenta hacer, introduciría consecuencias y adaptaría el siguiente reto sin cambiar las reglas arbitrariamente."
+    },
+    {
+      id:"false-echo",
+      title:"El eco equivocado",
+      text:"una zona abandonada reproduce versiones de decisiones anteriores del jugador, pero uno de esos ecos es falso. La misión consiste en descubrir qué recuerdo fue alterado usando contradicciones del entorno y las reacciones de los NPC."
+    },
+    {
+      id:"memory-town",
+      title:"El pueblo que recuerda",
+      text:"cada NPC conserva una versión distinta de un mismo suceso. El jugador debe reconstruir qué ocurrió sin asumir que alguno posee toda la verdad; sus decisiones cambian en quién confía el pueblo y qué información aparece después."
+    },
+    {
+      id:"three-promises",
+      title:"Las tres promesas",
+      text:"tres grupos piden ayuda al mismo tiempo y cada ayuda implica una promesa con consecuencias posteriores. No existe una ruta perfecta: la misión registra qué compromisos aceptó el jugador y hace que vuelvan a importar más adelante."
+    },
+    {
+      id:"unfinished-map",
+      title:"El mapa incompleto",
+      text:"el mapa solo revela lugares que el jugador comprende de verdad. Explorar no basta: hay que observar patrones, hablar con personajes y probar hipótesis para que nuevas zonas aparezcan y para distinguir atajos reales de caminos engañosos."
+    }
+  ];
+
+  function missionIdeaAnswer(b,{another=false}={}){
+    const q=ensure(b);
+    if(!Array.isArray(q.missionHistory))q.missionHistory=[];
+    let choice;
+    if(!another&&!q.missionHistory.length)choice=MISSION_BANK[0];
+    else{
+      const recent=new Set(q.missionHistory.slice(-Math.min(4,MISSION_BANK.length-1)));
+      choice=MISSION_BANK.find(x=>!recent.has(x.id)) || MISSION_BANK.find(x=>x.id!==q.missionHistory.at(-1)) || MISSION_BANK[0];
+    }
+    q.missionHistory.push(choice.id);
+    if(q.missionHistory.length>12)q.missionHistory.splice(0,q.missionHistory.length-12);
+    return `Crearía una misión llamada «${choice.title}»: ${choice.text}`;
+  }
+
+  function anotherIdeaAnswer(b,ctx={}){
+    const q=ensure(b);
+    const previous=String(ctx.priorNpc||q.lastReply||"");
+    if(q.missionHistory?.length||/\bmisi[oó]n\b/i.test(previous))return missionIdeaAnswer(b,{another:true});
+    return "Puedo proponerte otra idea, pero necesito saber de qué tipo: otra misión, una mecánica, un personaje, un escenario u otra cosa. No quiero asumir el tipo solo por la palabra «idea».";
   }
 
   function creatorPurposeAnswer(b,frame){
@@ -207,7 +252,9 @@
       case "ask_pet_name":return petAnswer(b,"name");
       case "ask_pet_death_time":return petAnswer(b,"time");
       case "ask_liked_idea":return likedIdeaAnswer(b);
-      case "ask_mission_idea":return missionIdeaAnswer();
+      case "ask_mission_idea":return missionIdeaAnswer(b);
+      case "ask_another_mission_idea":return missionIdeaAnswer(b,{another:true});
+      case "ask_another_idea":return anotherIdeaAnswer(b,ctx);
       case "creator_purpose_statement":return creatorPurposeAnswer(b,frame);
       case "ask_changed_mind":return changedMindAnswer(b);
       case "repair_repeat_question":{
@@ -334,10 +381,10 @@
   };
 
   window.NpcIntConversationQuality={
-    classify,frameFor,refine,isInternalFocus,lastUserQuestion,previousSubstantiveUser,changedMindAnswer,petAnswer,firstUserAnswer,likedIdeaAnswer,missionIdeaAnswer,
+    classify,frameFor,refine,isInternalFocus,lastUserQuestion,previousSubstantiveUser,changedMindAnswer,petAnswer,firstUserAnswer,likedIdeaAnswer,missionIdeaAnswer,anotherIdeaAnswer,
     config:{knowledgeMatching:"native:knowledge.js"}
   };
 
   ensure(brain);
-  print("system","","calidad conversacional v1.6 cargada · referencias de ideas + memoria autobiográfica + reparaciones");
+  print("system","","calidad conversacional v1.7 cargada · banco de misiones no repetidas + continuidad de ideas + reparaciones");
 })();

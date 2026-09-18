@@ -7,6 +7,10 @@ const vm=require("vm");
 
 const root=path.join(__dirname,"..");
 const html=fs.readFileSync(path.join(root,"index.html"),"utf8");
+const appSource=fs.readFileSync(path.join(root,"app.js"),"utf8");
+const styleSource=fs.readFileSync(path.join(root,"style.css"),"utf8");
+assert.match(appSource,/print\("initiative",brain\.identity\.name\+" · iniciativa>"/,"las salidas autónomas deben llevar un prefijo distinto de una respuesta directa");
+assert.match(styleSource,/\.line\.initiative/,"la iniciativa debe tener una presentación visual diferenciada");
 const scripts=[...html.matchAll(/<script\s+src="([^"]+)"/g)].map(match=>match[1]);
 const position=name=>scripts.indexOf(name);
 
@@ -230,10 +234,28 @@ async function verifyCompleteBrowserOrder(){
   assert.ok(!compactMessages[1].content.includes('"cognitiveState"'),"el prompt Qwen no debe volcar el estado cognitivo JSON completo");
   assert.ok(compactMessages[1].content.length<4000,"el contexto browser de Qwen debe permanecer pequeño para 0.6B");
 
-  await Promise.resolve(vm.runInContext('brain.hear("que te gustaria crear ?")',browser));
+  const firstMission=String(await Promise.resolve(vm.runInContext('brain.hear("que te gustaria crear ?")',browser)));
+  assert.match(firstMission,/La sala que cambia de reglas/i);
   await Promise.resolve(vm.runInContext('brain.hear("me gusta esa idea")',browser));
   const likedIdea=String(await Promise.resolve(vm.runInContext('brain.hear("que idea es la que me gusta ?")',browser)));
   assert.match(likedIdea,/sala que cambia de reglas/i,"la referencia «esa idea» debe resolverse hacia la misión anterior");
+
+  const secondMission=String(await Promise.resolve(vm.runInContext('brain.hear("dime otra idea")',browser)));
+  assert.match(secondMission,/Crearía una misión llamada/i,"«dime otra idea» debe continuar el hilo de misiones");
+  assert.doesNotMatch(secondMission,/La sala que cambia de reglas/i,"otra idea debe evitar repetir inmediatamente la misma misión");
+
+  const acknowledgement=String(await Promise.resolve(vm.runInContext('brain.hear("vale")',browser)));
+  assert.doesNotMatch(acknowledgement,/Crearía una misión llamada/i,"«vale» nunca debe disparar ask_mission_idea por colisión hash");
+  assert.strictEqual(vm.runInContext('brain.intentRouter.current.intent',browser),"reaction");
+
+  const beforeDisclosureTopics=vm.runInContext('brain.topicManager.topics.length',browser);
+  const disclosure=String(await Promise.resolve(vm.runInContext('brain.hear("te quiero contar algo")',browser)));
+  assert.match(disclosure,/Te escucho|Cuéntame/i,"una apertura de confidencia debe invitar a continuar, no registrarse como dato vacío");
+  assert.strictEqual(vm.runInContext('brain.topicManager.topics.length',browser),beforeDisclosureTopics,"«te quiero contar algo» no debe persistirse como tópico");
+
+  const tomorrowAction=String(await Promise.resolve(vm.runInContext('brain.hear("qué te gustaría hacer mañana?")',browser)));
+  assert.match(tomorrowAction,/Mañana me gustaría/i,"la pregunta temporal debe llegar a ask_desired_action");
+  assert.doesNotMatch(tomorrowAction,/Decido comparando/i,"preguntar qué quiere hacer mañana no debe responder con el proceso general de decisión");
   const beforeHear=fullPipeline.state.trace.length;
   await Promise.resolve(vm.runInContext('brain.hear("me interesa construir un juego en Unity")',browser));
   assert.strictEqual(fullPipeline.state.trace.length,beforeHear+1,"el hear final debe atravesar dispatch aunque wrappers posteriores lo envuelvan");
@@ -242,6 +264,7 @@ async function verifyCompleteBrowserOrder(){
   const hearState=JSON.parse(vm.runInContext("JSON.stringify({input:brain.cognitiveState.current.input,perception:brain.mind.lastCycle.perception.type,idea:!!brain.ideaEngine.current,companion:!!brain.companionState})",browser));
   assert.deepStrictEqual(hearState,{input:"me interesa construir un juego en Unity",perception:"user",idea:true,companion:true},"las capas registradas y los wrappers posteriores deben ejecutar en la misma llamada");
 
+  vm.runInContext("brain.reset()",browser);
   const hostilityBefore=JSON.parse(vm.runInContext("JSON.stringify({relationTrust:brain.relation.trust,modelTrust:brain.relationshipModel.trust,comfort:brain.relationshipModel.comfort,tension:brain.relationshipModel.tension})",browser));
   const beforeHostility=fullPipeline.state.trace.length;
   await Promise.resolve(vm.runInContext('brain.hear("¡Eres una hpta!")',browser));

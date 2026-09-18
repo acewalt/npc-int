@@ -2,7 +2,7 @@
 
 (function(){
   const norm=s=>String(s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9ñ ]+/g," ").replace(/\s+/g," ").trim();
-  const meta=/^(hola|buenas|hey|ey|vale|ok|okay|si|no|aja|mm+|como estas|y tu|que haces|que quieres hacer|que puedes hacer|que sabes|contexto de que)$/;
+  const meta=/^(hola|buenas|hey|ey|vale|ok|okay|si|no|aja|mm+|como estas|y tu|que haces|que quieres hacer|que puedes hacer|que sabes|contexto de que|te quiero contar algo|quiero contarte algo|te cuento algo)$/;
   const npcMeta=/^(?:y )?(?:quien eres|que eres|como eres|cual es tu proposito|que proposito tienes|para que existes|por que existes|que quieres|que deseas|que te gustaria hacer|que quieres hacer|que te gusta|que prefieres|como te sientes|que estas haciendo|que piensas|que tienes en mente)$/;
   const questionLead=/^(?:y )?(?:que|como|cuando|donde|por que|porque|cual|quien)\b/;
   const transient=/\b(?:me siento|estoy|ando)\s+(?:solo|sola|aislado|aislada|triste|mal|ansioso|ansiosa|aburrido|aburrida|cansado|cansada|frustrado|frustrada)\b/i;
@@ -68,5 +68,5 @@
   function format(b){const s=sanitize(ensure(b)),a=active(b);return [`activo=${a?.label||"—"}`,`temas=${s.topics.length}`,...recent(b,10).map(t=>`#${t.id} [${t.status}] ${t.label} · menciones=${t.mentions} · imp=${t.importance.toFixed(2)}`)].join("\n");}
 
   window.NpcIntTopics={ensure,candidate,isKeepable,noteTurn,noteNpcTopic,active,recent,resumeCandidate,mark,snapshot,restore,format};
-  print("system","","gestor de temas v1.2 cargado · preguntas/meta fuera del tópico + continuidad selectiva");
+  print("system","","gestor de temas v1.3 cargado · aperturas conversacionales y preguntas fuera del tópico + continuidad selectiva");
 })();

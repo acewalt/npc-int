@@ -1,8 +1,13 @@
 "use strict";
 
 (function(){
-  const DIM=384;
-  const VERSION="1.1";
+  const FEATURE_SPACES={
+    word:{offset:0,size:1024},
+    bigram:{offset:1024,size:1024},
+    char:{offset:2048,size:2048}
+  };
+  const DIM=4096;
+  const VERSION="1.2";
 
   function repairInput(s){
     return String(s||"")
@@ -41,18 +46,21 @@
     return h>>>0;
   }
 
-  function addFeature(v,key,weight){
-    const h=hash(key),idx=h%DIM,sign=(h&1)?1:-1;
+  function addFeature(v,key,weight,space){
+    const h=hash(key),cfg=FEATURE_SPACES[space],idx=cfg.offset+(h%cfg.size),sign=(h&1)?1:-1;
     v[idx]+=sign*weight;
   }
 
+  function usefulWords(text){
+    return words(text).filter(w=>!stop.has(w)&&w.length>1);
+  }
+
   function embed(text){
-    const ws=words(text),v=new Float32Array(DIM);
-    const useful=ws.filter(w=>!stop.has(w));
-    for(const w of useful)addFeature(v,"w:"+w,1);
-    for(let i=0;i<useful.length-1;i++)addFeature(v,"b:"+useful[i]+"_"+useful[i+1],.72);
+    const useful=usefulWords(text),v=new Float32Array(DIM);
+    for(const w of useful)addFeature(v,w,1,"word");
+    for(let i=0;i<useful.length-1;i++)addFeature(v,useful[i]+"_"+useful[i+1],.72,"bigram");
     const compact=useful.join("_");
-    for(let i=0;i<compact.length-2;i++)addFeature(v,"c:"+compact.slice(i,i+3),.14);
+    for(let i=0;i<compact.length-2;i++)addFeature(v,compact.slice(i,i+3),.08,"char");
     let mag=0;for(const x of v)mag+=x*x;mag=Math.sqrt(mag)||1;
     for(let i=0;i<v.length;i++)v[i]/=mag;
     return v;
@@ -93,6 +101,12 @@
     ask_mission_idea:[
       "qué misión te gustaría crear","qué misión se te ocurre","inventa una misión","qué tipo de misión crearías"
     ],
+    ask_another_mission_idea:[
+      "dime otra misión","dame otra idea para una misión","otra misión diferente","propón otra misión"
+    ],
+    ask_another_idea:[
+      "dime otra idea","dame otra idea","otra idea","se te ocurre otra"
+    ],
     ask_changed_mind:[
       "alguna vez cambiaste de opinión","has cambiado de parecer","alguna vez corregiste una idea tuya"
     ],
@@ -125,6 +139,7 @@
     thanks:["gracias","muchas gracias","te agradezco"],
     apology:["perdón","disculpa","lo siento"],
     request_company:["habla conmigo","acompáñame","quiero conversar contigo"],
+    offer_disclosure:["te quiero contar algo","quiero contarte algo","te cuento algo"],
     ask_personality:["cómo eres","cómo es tu personalidad","descríbete"],
     ask_relationship:["qué piensas de mí","cómo va nuestra relación","somos amigos"]
   };
@@ -145,6 +160,12 @@
   function structural(text){
     const raw=String(text||"").trim(),n=norm(raw),question=isQuestion(raw,n);
     let m;
+
+    if(/^(vale|ok|okay|bien|aja|entiendo)$/.test(n))
+      return {intent:"reaction",confidence:.995,source:"structural",domain:"social"};
+
+    if(/^(?:te quiero contar algo|quiero contarte algo|te cuento algo)$/.test(n))
+      return {intent:"offer_disclosure",confidence:.995,source:"structural",domain:"social"};
 
     if(/\bno te pregunte eso\b/.test(n)||/\besa no era mi pregunta\b/.test(n)||/\brespondiste otra cosa\b/.test(n)||(/\bmira lo que te dije\b/.test(n)&&/\bpregunte\b/.test(n)))
       return {intent:"repair_wrong_answer",confidence:.995,source:"structural",domain:"repair"};
@@ -174,13 +195,23 @@
        /^(?:que|cual) idea dije que me gustaba$/.test(n))
       return {intent:"ask_liked_idea",confidence:.995,source:"structural",domain:"memory"};
 
-    if(/^(?:y )?que te gustaria hacer(?: hoy| ahora)?$/.test(n) || /^(?:y )?que quisieras hacer(?: hoy| ahora)?$/.test(n))
-      return {intent:"ask_desired_action",confidence:.99,source:"structural",domain:"self"};
+    if((m=n.match(/^(?:y )?que te gustaria hacer(?: (hoy|ahora|manana|esta tarde|esta noche))?$/)) ||
+       (m=n.match(/^(?:y )?que quisieras hacer(?: (hoy|ahora|manana|esta tarde|esta noche))?$/)))
+      return {intent:"ask_desired_action",confidence:.99,source:"structural",domain:"self",slots:{when:m[1]||"ahora"}};
+
+    if(/^(?:dime|dame|propone|proponme) (?:alguna )?otra (?:idea )?(?:para )?(?:otra )?mision$/.test(n) ||
+       /^(?:dime|dame) otra mision(?: diferente)?$/.test(n))
+      return {intent:"ask_another_mission_idea",confidence:.995,source:"structural",domain:"creation"};
+
+    if(/^(?:dime|dame) (?:alguna )?otra idea$/.test(n) || /^otra idea$/.test(n))
+      return {intent:"ask_another_idea",confidence:.99,source:"structural",domain:"creation"};
 
     if(/^(?:vale )?(?:que|cual) mision (?:te gustaria|quisieras|quieres) crear$/.test(n)||/^(?:vale )?que mision se te ocurre(?: crear)?$/.test(n))
       return {intent:"ask_mission_idea",confidence:.99,source:"structural",domain:"creation"};
 
-    if(/^(?:alguna vez )?(?:cambiaste|has cambiado) de opinion(?: sobre algo)?$/.test(n)||/^alguna vez has cambiado de parecer(?: sobre algo)?$/.test(n))
+    if(/^(?:alguna vez )?(?:cambiaste|has cambiado) de opinion(?: sobre algo)?$/.test(n) ||
+       /^alguna vez has cambiado de parecer(?: sobre algo)?$/.test(n) ||
+       /^(?:alguna vez )?(?:tuviste que |has tenido que )?(?:corregir|revisar|cambiar) (?:una )?opinion tuya$/.test(n))
       return {intent:"ask_changed_mind",confidence:.99,source:"structural",domain:"self"};
 
     if((m=n.match(/^te cree con (?:la )?finalidad de (.+)$/)))
@@ -231,6 +262,10 @@
   }
 
   function semanticPrototype(text){
+    const useful=usefulWords(text);
+    // Una palabra aislada ("vale", "sí", "ok") no tiene señal suficiente para
+    // autorizar una intención por similitud vectorial: las colisiones dominan.
+    if(useful.length<2)return null;
     const v=embed(text);
     let best=null,second=null;
     for(const [intent,vectors] of Object.entries(protoVectors)){
@@ -242,8 +277,10 @@
     }
     if(!best)return null;
     const margin=best.score-(second?.score??0);
-    if(best.score<.54||margin<.035)return null;
-    return {intent:best.intent,confidence:Math.min(.93,.58+best.score*.34),source:"local-embedding",domain:domainFor(best.intent),embedding:{type:"hashed-feature-v1",score:best.score,margin}};
+    const minScore=useful.length===2?.66:.56;
+    const minMargin=useful.length===2?.08:.045;
+    if(best.score<minScore||margin<minMargin)return null;
+    return {intent:best.intent,confidence:Math.min(.91,.56+best.score*.32),source:"local-embedding",domain:domainFor(best.intent),embedding:{type:"hashed-feature-v2",score:best.score,margin,terms:useful.length}};
   }
 
   function domainFor(intent){
@@ -251,8 +288,8 @@
     if(intent.startsWith("repair_"))return "repair";
     if(intent.includes("memory")||intent.includes("pet")||intent.includes("first_user")||intent.includes("last_user")||intent.includes("color_preference")||intent==="ask_liked_idea")return "memory";
     if(intent.includes("fact")||intent==="factual_query")return "knowledge";
-    if(intent.includes("mission")||intent.includes("creation"))return "creation";
-    if(["greeting","farewell","thanks","apology","request_company","ask_relationship","ask_shared_activity","ask_companion_preference"].includes(intent))return "social";
+    if(intent.includes("mission")||intent.includes("creation")||intent==="ask_another_idea")return "creation";
+    if(["greeting","farewell","thanks","apology","request_company","offer_disclosure","reaction","ask_relationship","ask_shared_activity","ask_companion_preference"].includes(intent))return "social";
     if(intent.startsWith("ask_")||intent==="creator_purpose_statement")return "self";
     if(intent==="preference_statement"||intent==="personal_event")return "personal";
     return "conversation";
@@ -290,8 +327,8 @@
       greeting:"greeting",farewell:"farewell",ask_state:"ask_state",ask_identity:"ask_identity",ask_kind:"ask_kind",ask_purpose:"ask_purpose",
       ask_memory:"ask_memory",ask_reason:"ask_why"
     };
-    const companionSet=new Set(["greeting","farewell","thanks","apology","ask_companion_preference","ask_personality","ask_relationship","request_company","ask_shared_activity","ask_user_color_preference"]);
-    const qualitySet=new Set(["repair_wrong_answer","repair_repeat_question","repair_topic_drift","ask_first_user_message","ask_last_user_question","ask_pet_name","ask_pet_death_time","ask_liked_idea","ask_mission_idea","ask_changed_mind","creator_purpose_statement","ask_current_thought","ask_decision_process"]);
+    const companionSet=new Set(["greeting","farewell","thanks","apology","offer_disclosure","ask_companion_preference","ask_personality","ask_relationship","request_company","ask_shared_activity","ask_user_color_preference"]);
+    const qualitySet=new Set(["reaction","repair_wrong_answer","repair_repeat_question","repair_topic_drift","ask_first_user_message","ask_last_user_question","ask_pet_name","ask_pet_death_time","ask_liked_idea","ask_mission_idea","ask_another_mission_idea","ask_another_idea","ask_changed_mind","creator_purpose_statement","ask_current_thought","ask_decision_process"]);
     const arbiterSet=new Set(["ask_self_state","ask_self_summary","ask_capabilities","ask_knowledge_summary","ask_desired_action","ask_creation_preference","ask_creation_method","ask_destination","destination_proposal","ask_context_reference","ask_opinion_about"]);
     const understandingSet=new Set(["ask_capabilities","ask_understanding","ask_concept_understanding","ask_self_concept","ask_internet_access","ask_reason","ask_current_thought"]);
     const refinementMap={personal_event:"express_grief"};
@@ -393,6 +430,6 @@
   };
 
   ensure(brain);
-  window.NpcIntIntentRouter={version:VERSION,ensure,resolve,currentFor,routeFor,authoritative,embed,cosine,format,domainFor,syncQueryFrame,repairInput};
-  print("system","","intent router v1.1 cargado · intención personal protegida + paráfrasis/typos + embedding local + /intent");
+  window.NpcIntIntentRouter={version:VERSION,ensure,resolve,currentFor,routeFor,authoritative,embed,cosine,semanticPrototype,format,domainFor,syncQueryFrame,repairInput,usefulWords};
+  print("system","","intent router v1.2 cargado · subespacios hash + guardia de entradas cortas + continuidad de ideas");
 })();

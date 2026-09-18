@@ -187,7 +187,9 @@
     const routed=window.NpcIntIntentRouter?.currentFor?.(brain,userText);
     const intent=routed?.intent||brain.conversationQuality?.lastIntent||"";
     const affect=brain.companionState?.lastUserAffect?.kind||"";
-    return intent==="ask_changed_mind"||
+    return intent==="reaction"||
+      intent==="offer_disclosure"||
+      intent==="ask_changed_mind"||
       intent==="ask_last_user_question"||
       intent==="ask_first_user_message"||
       intent==="ask_pet_name"||
@@ -195,6 +197,9 @@
       intent==="ask_user_color_preference"||
       intent==="ask_liked_idea"||
       intent==="ask_mission_idea"||
+      intent==="ask_another_mission_idea"||
+      intent==="ask_another_idea"||
+      intent==="ask_desired_action"||
       intent==="creator_purpose_statement"||
       intent==="preference_statement"||
       intent.startsWith("repair_")||
@@ -646,5 +651,5 @@
   updateQwenButton();
 
   window.NpcIntNeuralWeb={state,health,loadQwen,activateQwen,updateQwenButton,generate,browserMessages,contextFor,compactCompanion,prepareSymbolicDraft,recordNeuralTurn,turnMode,neuralQuality};
-  print("system","","capa neuronal web v1.2 cargada · filtro de idioma + prompt mínimo + memoria simbólica protegida");
+  print("system","","capa neuronal web v1.3 cargada · follow-ups simbólicos protegidos + filtro de idioma + prompt mínimo");
 })();
