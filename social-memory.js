@@ -56,7 +56,8 @@
     const push=(kind,value,importance=.6,tags=[],data=null)=>{if(value&&String(value).trim().length>1&&!sensitive.test(String(value)))out.push({kind,value:String(value).trim(),importance,tags,data});};
     let m;
     if((m=raw.match(/(?:me llamo|mi nombre es)\s+([A-Za-zÁÉÍÓÚÜÑáéíóúüñ][\wÁÉÍÓÚÜÑáéíóúüñ-]{1,40})/i)))push("name",m[1],.95,["identity"]);
-    const asksQuestion=/[?¿]/.test(raw)||/^(?:como|donde|que|cual|quien|por que|porque|a que edad|y a que edad|en que edad)\b/.test(n)||/^cuando (?!tenia\b|era\b|estaba\b)/.test(n);
+    const temporalDisclosure=/^cuando\b/.test(n)&&/\b(?:tenia|era|estaba|tuve|vivia)\b/.test(n);
+    const asksQuestion=/[?¿]/.test(raw)||/^(?:como|donde|que|cual|quien|por que|porque|a que edad|y a que edad|en que edad)\b/.test(n)||(/^cuando\b/.test(n)&&!temporalDisclosure);
     if(!asksQuestion&&/\b(?:murio|fallecio|se murio)\b/.test(n)&&/\b(?:perro|perra|gato|gata|mascota)\b/.test(n)){
       const species=(n.match(/\b(perro|perra|gato|gata|mascota)\b/)||[])[1]||"mascota";
       const nameMatch=raw.match(/\b(?:llamad[oa]|se llamaba|de nombre)\s+([A-Za-zÁÉÍÓÚÜÑáéíóúüñ][\wÁÉÍÓÚÜÑáéíóúüñ-]{1,40})/i);
